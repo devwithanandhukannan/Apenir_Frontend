@@ -1,0 +1,3 @@
+export const DEFAULT_ROWS_PER_PAGE_OPTIONS = [5, 10, 25, 50];
+export const DEFAULT_DEBOUNCE_MS = 300;
+export const DEFAULT_SKELETON_ROWS = 5;

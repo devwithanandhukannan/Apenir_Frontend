@@ -1,0 +1,385 @@
+import React from 'react';
+import { useRouter } from 'next/router';
+import { useAppSelector } from '@/core_components/store/hooks';
+import Drawer from '@mui/material/Drawer';
+import List from '@mui/material/List';
+import ListItemButton from '@mui/material/ListItemButton';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import ListItemText from '@mui/material/ListItemText';
+import Box from '@mui/material/Box';
+import Divider from '@mui/material/Divider';
+import Typography from '@mui/material/Typography';
+import Button from '@mui/material/Button';
+import Avatar from '@mui/material/Avatar';
+import Tooltip from '@mui/material/Tooltip';
+import IconButton from '@mui/material/IconButton';
+
+// Icon imports
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import ScienceIcon from '@mui/icons-material/Science';
+import PeopleIcon from '@mui/icons-material/People';
+import PersonIcon from '@mui/icons-material/Person';
+import LayersIcon from '@mui/icons-material/Layers';
+import InventoryIcon from '@mui/icons-material/Inventory';
+import PaidIcon from '@mui/icons-material/Paid';
+import DescriptionIcon from '@mui/icons-material/Description';
+import BarChartIcon from '@mui/icons-material/BarChart';
+import SettingsIcon from '@mui/icons-material/Settings';
+import HelpIcon from '@mui/icons-material/Help';
+import AddIcon from '@mui/icons-material/Add';
+import KeyboardDoubleArrowRightIcon from '@mui/icons-material/KeyboardDoubleArrowRight';
+import KeyboardDoubleArrowLeftIcon from '@mui/icons-material/KeyboardDoubleArrowLeft';
+
+const DRAWER_WIDTH = 250;
+
+interface SidebarProps {
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({
+  isCollapsed: controlledIsCollapsed,
+  onToggleCollapse,
+}) => {
+  const router = useRouter();
+  const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+
+  const [localIsCollapsed, setLocalIsCollapsed] = React.useState(false);
+  const isCollapsed = controlledIsCollapsed !== undefined ? controlledIsCollapsed : localIsCollapsed;
+
+  const handleToggle = () => {
+    if (onToggleCollapse) {
+      onToggleCollapse();
+    } else {
+      setLocalIsCollapsed(!localIsCollapsed);
+    }
+  };
+
+  const handleNavigate = (path: string) => {
+    router.push(path);
+  };
+
+  const isActive = (path: string) => {
+    if (path === '/admin') {
+      return router.pathname === '/admin';
+    }
+    if (path === '/') {
+      return router.pathname === '/';
+    }
+    return router.pathname.startsWith(path);
+  };
+
+  const handleNewSample = () => {
+    alert('Action: Create New Sample modal initiated.');
+  };
+
+  // Define admin navigation list according to the screenshot
+  const adminMenuItems = [
+    { text: 'Dashboard', path: '/admin', icon: <DashboardIcon fontSize="small" /> },
+    { text: 'Lab', path: '/admin/lab-console', icon: <ScienceIcon fontSize="small" /> }, // Mocks
+    { text: 'Staff', path: '/staff-console', icon: <PeopleIcon fontSize="small" /> },
+    { text: 'Customer', path: '/customer-console', icon: <PersonIcon fontSize="small" /> },
+    { text: 'Services', path: '/services-console', icon: <LayersIcon fontSize="small" /> },
+    { text: 'Packages', path: '/packages-console', icon: <InventoryIcon fontSize="small" /> },
+    { text: 'Finance', path: '/finance-console', icon: <PaidIcon fontSize="small" /> },
+    { text: 'Reports', path: '/reports-console', icon: <DescriptionIcon fontSize="small" /> },
+    { text: 'Analytics', path: '/analytics-console', icon: <BarChartIcon fontSize="small" /> },
+  ];
+
+  return (
+    <Drawer
+      variant="permanent"
+      sx={{
+        width: isCollapsed ? 70 : DRAWER_WIDTH,
+        flexShrink: 0,
+        transition: (theme) => theme.transitions.create('width', {
+          easing: theme.transitions.easing.sharp,
+          duration: theme.transitions.duration.enteringScreen,
+        }),
+        [`& .MuiDrawer-paper`]: { 
+          width: isCollapsed ? 70 : DRAWER_WIDTH, 
+          boxSizing: 'border-box',
+          borderRight: '1px solid var(--color-border)',
+          backgroundColor: 'var(--color-paper)',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          transition: (theme) => theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.enteringScreen,
+          }),
+          overflowX: 'hidden',
+        },
+      }}
+    >
+      <div>
+        {/* Brand Console Header */}
+        <Box sx={{ p: isCollapsed ? '20px 0 10px 0' : '20px 24px 10px 24px', display: 'flex', flexDirection: 'column', alignItems: isCollapsed ? 'center' : 'stretch', gap: 0.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: isCollapsed ? 'center' : 'flex-start', gap: 1 }}>
+            <Avatar 
+              sx={{ bgcolor: 'primary.main', width: 28, height: 28, fontSize: '14px', fontWeight: 800 }}
+              className="bg-primary"
+            >
+              A
+            </Avatar>
+            {!isCollapsed && (
+              <Typography 
+                variant="subtitle1" 
+                sx={{ fontWeight: 800, letterSpacing: '-0.3px', lineHeight: 1.2 }}
+                color="text.primary"
+                className="font-extrabold tracking-tight"
+              >
+                Appenir<span className="text-secondary"> MS</span>
+              </Typography>
+            )}
+          </Box>
+          {!isCollapsed && (
+            <Typography 
+              variant="caption" 
+              color="text.secondary" 
+              sx={{ fontWeight: 600, pl: 4, letterSpacing: '0.2px' }}
+            >
+              Admin Console
+            </Typography>
+          )}
+        </Box>
+
+        <Divider sx={{ my: 1, borderColor: 'var(--color-divider)' }} />
+
+        {/* Sidebar Middle Content */}
+        <Box sx={{ px: isCollapsed ? 1 : 2, py: 1.5 }}>
+          
+
+          {/* Dynamic Menu items based on active role */}
+          {isAuthenticated && user && user.role === 'admin' ? (
+            <List component="nav" sx={{ p: 0 }}>
+              {adminMenuItems.map((item) => {
+                const active = isActive(item.path);
+                const buttonContent = (
+                  <ListItemButton
+                    selected={active}
+                    onClick={() => handleNavigate(item.path)}
+                    sx={{
+                      borderRadius: '8px',
+                      mb: 0.5,
+                      py: 1,
+                      px: isCollapsed ? 0 : 2,
+                      justifyContent: isCollapsed ? 'center' : 'flex-start',
+                      color: active ? 'primary.main' : 'text.secondary',
+                      bgcolor: active ? 'rgba(var(--color-primary), 0.08)' : 'transparent',
+                      '&.Mui-selected': {
+                        bgcolor: 'primary.light',
+                        color: 'primary.dark',
+                        '& .MuiListItemIcon-root': { color: 'primary.dark' },
+                      },
+                      '&:hover': {
+                        bgcolor: active ? 'primary.light' : 'rgba(0, 0, 0, 0.04)',
+                      }
+                    }}
+                  >
+                    <ListItemIcon sx={{ minWidth: isCollapsed ? 0 : 32, justifyContent: 'center', color: active ? 'primary.main' : 'text.secondary' }}>
+                      {item.icon}
+                    </ListItemIcon>
+                    {!isCollapsed && (
+                      <ListItemText 
+                        primary={<Typography variant="body2" sx={{ fontWeight: active ? 700 : 500 }}>{item.text}</Typography>} 
+                      />
+                    )}
+                  </ListItemButton>
+                );
+
+                return isCollapsed ? (
+                  <Tooltip key={item.text} title={item.text} placement="right">
+                    <Box>{buttonContent}</Box>
+                  </Tooltip>
+                ) : (
+                  <React.Fragment key={item.text}>
+                    {buttonContent}
+                  </React.Fragment>
+                );
+              })}
+            </List>
+          ) : (
+            // Fallback for customer or lab roles
+            <List component="nav" sx={{ p: 0 }}>
+              {isCollapsed ? (
+                <Tooltip title="Home Portal" placement="right">
+                  <Box>
+                    <ListItemButton
+                      selected={isActive('/')}
+                      onClick={() => handleNavigate('/')}
+                      sx={{ borderRadius: '8px', mb: 0.5, py: 1, px: 0, justifyContent: 'center' }}
+                    >
+                      <ListItemIcon sx={{ minWidth: 0, justifyContent: 'center' }}>
+                        <DashboardIcon fontSize="small" />
+                      </ListItemIcon>
+                    </ListItemButton>
+                  </Box>
+                </Tooltip>
+              ) : (
+                <ListItemButton
+                  selected={isActive('/')}
+                  onClick={() => handleNavigate('/')}
+                  sx={{ borderRadius: '8px', mb: 0.5 }}
+                >
+                  <ListItemIcon sx={{ minWidth: 32 }}><DashboardIcon fontSize="small" /></ListItemIcon>
+                  <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: 600 }}>Home Portal</Typography>} />
+                </ListItemButton>
+              )}
+              {isAuthenticated && user && (
+                isCollapsed ? (
+                  <Tooltip title={user.role === 'lab' ? 'Lab Work' : 'My Account'} placement="right">
+                    <Box>
+                      <ListItemButton
+                        selected={isActive(`/${user.role}`)}
+                        onClick={() => handleNavigate(`/${user.role}`)}
+                        sx={{ borderRadius: '8px', mb: 0.5, py: 1, px: 0, justifyContent: 'center' }}
+                      >
+                        <ListItemIcon sx={{ minWidth: 0, justifyContent: 'center' }}>
+                          {user.role === 'lab' ? <ScienceIcon fontSize="small" /> : <PersonIcon fontSize="small" />}
+                        </ListItemIcon>
+                      </ListItemButton>
+                    </Box>
+                  </Tooltip>
+                ) : (
+                  <ListItemButton
+                    selected={isActive(`/${user.role}`)}
+                    onClick={() => handleNavigate(`/${user.role}`)}
+                    sx={{ borderRadius: '8px', mb: 0.5 }}
+                  >
+                    <ListItemIcon sx={{ minWidth: 32 }}>
+                      {user.role === 'lab' ? <ScienceIcon fontSize="small" /> : <PersonIcon fontSize="small" />}
+                    </ListItemIcon>
+                    <ListItemText 
+                      primary={
+                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                          {user.role === 'lab' ? 'Lab Work' : 'My Account'}
+                        </Typography>
+                      } 
+                    />
+                  </ListItemButton>
+                )
+              )}
+            </List>
+          )}
+        </Box>
+      </div>
+
+      {/* Sticky Bottom Segment (Settings, Support, and Collapse Toggle) */}
+      <Box sx={{ p: isCollapsed ? 1 : 2, borderTop: '1px solid var(--color-divider)', display: 'flex', flexDirection: 'column', gap: 0.5 }}>
+        <List component="nav" sx={{ p: 0, m: 0 }}>
+          {isCollapsed ? (
+            <Tooltip title="Settings" placement="right">
+              <Box>
+                <ListItemButton
+                  onClick={() => alert('MOCK: Settings Panel')}
+                  sx={{
+                    borderRadius: '8px',
+                    py: 0.8,
+                    px: 0,
+                    justifyContent: 'center',
+                    color: 'text.secondary',
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 0, justifyContent: 'center', color: 'text.secondary' }}>
+                    <SettingsIcon fontSize="small" />
+                  </ListItemIcon>
+                </ListItemButton>
+              </Box>
+            </Tooltip>
+          ) : (
+            <ListItemButton
+              onClick={() => alert('MOCK: Settings Panel')}
+              sx={{
+                borderRadius: '8px',
+                py: 0.8,
+                px: 2,
+                color: 'text.secondary',
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 32, color: 'text.secondary' }}>
+                <SettingsIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: 500 }}>Settings</Typography>} />
+            </ListItemButton>
+          )}
+
+          {isCollapsed ? (
+            <Tooltip title="Support" placement="right">
+              <Box>
+                <ListItemButton
+                  onClick={() => alert('MOCK: Support Panel')}
+                  sx={{
+                    borderRadius: '8px',
+                    py: 0.8,
+                    px: 0,
+                    justifyContent: 'center',
+                    color: 'text.secondary',
+                  }}
+                >
+                  <ListItemIcon sx={{ minWidth: 0, justifyContent: 'center', color: 'text.secondary' }}>
+                    <HelpIcon fontSize="small" />
+                  </ListItemIcon>
+                </ListItemButton>
+              </Box>
+            </Tooltip>
+          ) : (
+            <ListItemButton
+              onClick={() => alert('MOCK: Support Panel')}
+              sx={{
+                borderRadius: '8px',
+                py: 0.8,
+                px: 2,
+                color: 'text.secondary',
+              }}
+            >
+              <ListItemIcon sx={{ minWidth: 32, color: 'text.secondary' }}>
+                <HelpIcon fontSize="small" />
+              </ListItemIcon>
+              <ListItemText primary={<Typography variant="body2" sx={{ fontWeight: 500 }}>Support</Typography>} />
+            </ListItemButton>
+          )}
+        </List>
+
+        <Divider sx={{ my: 0.5, borderColor: 'var(--color-divider)' }} />
+
+        {isCollapsed ? (
+          <Tooltip title="Expand Sidebar" placement="right">
+            <Box>
+              <ListItemButton
+                onClick={handleToggle}
+                sx={{
+                  borderRadius: '8px',
+                  py: 0.8,
+                  px: 0,
+                  justifyContent: 'center',
+                  color: 'text.secondary',
+                }}
+              >
+                <ListItemIcon sx={{ minWidth: 0, justifyContent: 'end', color: 'text.secondary' }}>
+                  <KeyboardDoubleArrowRightIcon fontSize="small" />
+                </ListItemIcon>
+              </ListItemButton>
+            </Box>
+          </Tooltip>
+        ) : (
+          <ListItemButton
+            onClick={handleToggle}
+            sx={{
+              borderRadius: '8px',
+              py: 0.8,
+              px: 2,
+              color: 'text.secondary',
+            }}
+          >
+            <ListItemIcon sx={{ minWidth: 32, color: 'text.secondary' }}>
+              <KeyboardDoubleArrowLeftIcon fontSize="small" />
+            </ListItemIcon>
+          </ListItemButton>
+        )}
+      </Box>
+    </Drawer>
+  );
+};
+
+export default Sidebar;
