@@ -1,17 +1,17 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import TextField from '@mui/material/TextField';
-import InputAdornment from '@mui/material/InputAdornment';
-import IconButton from '@mui/material/IconButton';
-import SearchIcon from '@mui/icons-material/Search';
-import ClearIcon from '@mui/icons-material/Clear';
-import { SearchProps } from './type';
-import { debounce } from './utils';
-import { DEFAULT_DEBOUNCE_MS } from './constants';
+import React, { useState, useEffect, useMemo } from "react";
+import TextField from "@mui/material/TextField";
+import InputAdornment from "@mui/material/InputAdornment";
+import IconButton from "@mui/material/IconButton";
+import SearchIcon from "@mui/icons-material/Search";
+import ClearIcon from "@mui/icons-material/Clear";
+import { SearchProps } from "./type";
+import { debounce } from "./utils";
+import { DEFAULT_DEBOUNCE_MS } from "./constants";
 
 export const SearchBar: React.FC<SearchProps> = ({
   value,
   onChange,
-  placeholder = 'Search...',
+  placeholder = "Search...",
   disabled = false,
 }) => {
   const [localSearchValue, setLocalSearchValue] = useState(value);
@@ -24,7 +24,7 @@ export const SearchBar: React.FC<SearchProps> = ({
   // Create a debounced update callback to prevent rapid API calls
   const debouncedOnChange = useMemo(
     () => debounce((val: string) => onChange(val), DEFAULT_DEBOUNCE_MS),
-    [onChange]
+    [onChange],
   );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -34,8 +34,8 @@ export const SearchBar: React.FC<SearchProps> = ({
   };
 
   const handleClear = () => {
-    setLocalSearchValue('');
-    onChange('');
+    setLocalSearchValue("");
+    onChange("");
   };
 
   return (
@@ -50,22 +50,27 @@ export const SearchBar: React.FC<SearchProps> = ({
         input: {
           startAdornment: (
             <InputAdornment position="start">
-              <SearchIcon sx={{ color: 'text.secondary', fontSize: '20px' }} />
+              <SearchIcon sx={{ color: "text.secondary", fontSize: "20px" }} />
             </InputAdornment>
           ),
           endAdornment: localSearchValue ? (
             <InputAdornment position="end">
-              <IconButton onClick={handleClear} size="small" edge="end" disabled={disabled}>
-                <ClearIcon sx={{ fontSize: '18px' }} />
+              <IconButton
+                onClick={handleClear}
+                size="small"
+                edge="end"
+                disabled={disabled}
+              >
+                <ClearIcon sx={{ fontSize: "18px" }} />
               </IconButton>
             </InputAdornment>
           ) : null,
-        }
+        },
       }}
       sx={{
-        maxWidth: { xs: '100%', sm: 300 },
-        '& .MuiOutlinedInput-root': {
-          borderRadius: '8px',
+        maxWidth: { xs: "100%", sm: 300 },
+        "& .MuiOutlinedInput-root": {
+          borderRadius: "8px",
         },
       }}
     />

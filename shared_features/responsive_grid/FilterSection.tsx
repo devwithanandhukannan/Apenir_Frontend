@@ -1,14 +1,14 @@
-import React from 'react';
-import Box from '@mui/material/Box';
-import FormControl from '@mui/material/FormControl';
-import InputLabel from '@mui/material/InputLabel';
-import Select, { SelectChangeEvent } from '@mui/material/Select';
-import MenuItem from '@mui/material/MenuItem';
-import CircularProgress from '@mui/material/CircularProgress';
-import OutlinedInput from '@mui/material/OutlinedInput';
-import Chip from '@mui/material/Chip';
-import SearchBar from './SearchBar';
-import { FilterSectionProps } from './type';
+import React from "react";
+import Box from "@mui/material/Box";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select, { SelectChangeEvent } from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import CircularProgress from "@mui/material/CircularProgress";
+import OutlinedInput from "@mui/material/OutlinedInput";
+import Chip from "@mui/material/Chip";
+import SearchBar from "./SearchBar";
+import { FilterSectionProps } from "./type";
 
 export const FilterSection: React.FC<FilterSectionProps> = ({
   filterMenuConfig = [],
@@ -22,10 +22,10 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
   return (
     <Box
       sx={{
-        display: 'flex',
-        flexDirection: { xs: 'column', sm: 'row' },
-        alignItems: { xs: 'stretch', sm: 'center' },
-        justifyContent: 'space-between',
+        display: "flex",
+        flexDirection: { xs: "column", sm: "row" },
+        alignItems: { xs: "stretch", sm: "center" },
+        justifyContent: "space-between",
         gap: 2,
         mb: 3,
       }}
@@ -42,17 +42,20 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
       {filterMenuConfig.length > 0 && (
         <Box
           sx={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
             gap: 2,
-            width: { xs: '100%', sm: 'auto' },
+            width: { xs: "100%", sm: "auto" },
           }}
         >
           {filterMenuConfig.map((item) => {
-            const selectValue = filters[item.key] !== undefined
-              ? filters[item.key]
-              : (item.multiple ? [] : '');
+            const selectValue =
+              filters[item.key] !== undefined
+                ? filters[item.key]
+                : item.multiple
+                  ? []
+                  : "";
 
             const handleChange = (e: SelectChangeEvent<any>) => {
               onFilterChange(item.key, e.target.value);
@@ -79,18 +82,28 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
                   input={<OutlinedInput label={item.label} />}
                   renderValue={(selected) => {
                     if (item.multiple) {
-                      const selectedArray = Array.isArray(selected) ? selected : [selected];
+                      const selectedArray = Array.isArray(selected)
+                        ? selected
+                        : [selected];
                       return (
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        <Box
+                          sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}
+                        >
                           {selectedArray.map((value) => {
-                            const opt = item.options.find((o) => o.value === value);
+                            const opt = item.options.find(
+                              (o) => o.value === value,
+                            );
                             const textLabel = opt ? opt.label : String(value);
                             return (
                               <Chip
                                 key={value}
                                 label={textLabel}
                                 size="small"
-                                sx={{ height: 20, fontSize: '11px', borderRadius: '4px' }}
+                                sx={{
+                                  height: 20,
+                                  fontSize: "11px",
+                                  borderRadius: "4px",
+                                }}
                               />
                             );
                           })}
@@ -104,15 +117,19 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
                     item.loading ? (
                       <CircularProgress
                         size={16}
-                        sx={{ position: 'absolute', right: 28, color: 'text.secondary' }}
+                        sx={{
+                          position: "absolute",
+                          right: 28,
+                          color: "text.secondary",
+                        }}
                       />
                     ) : null
                   }
                   sx={{
-                    borderRadius: '8px',
-                    backgroundColor: 'background.paper',
-                    '& .MuiOutlinedInput-notchedOutline': {
-                      borderColor: 'var(--color-border)',
+                    borderRadius: "8px",
+                    backgroundColor: "background.paper",
+                    "& .MuiOutlinedInput-notchedOutline": {
+                      borderColor: "var(--color-border)",
                     },
                   }}
                 >
@@ -122,10 +139,12 @@ export const FilterSection: React.FC<FilterSectionProps> = ({
                       <em>All</em>
                     </MenuItem>
                   )}
-                  
+
                   {item.options.map((opt) => (
                     <MenuItem key={opt.value} value={opt.value}>
-                      {item.getOptionLabel ? item.getOptionLabel(opt) : opt.label}
+                      {item.getOptionLabel
+                        ? item.getOptionLabel(opt)
+                        : opt.label}
                     </MenuItem>
                   ))}
                 </Select>

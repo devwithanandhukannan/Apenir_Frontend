@@ -1,6 +1,6 @@
-import React from 'react';
-import TableCell from '@mui/material/TableCell';
-import { GridCellProps } from './type';
+import React from "react";
+import TableCell from "@mui/material/TableCell";
+import { GridCellProps } from "./type";
 
 export const GridCell: React.FC<GridCellProps> = ({
   row,
@@ -11,19 +11,19 @@ export const GridCell: React.FC<GridCellProps> = ({
 
   return (
     <TableCell
-      align={column.align || 'left'}
+      align={column.align || "left"}
       className={column.cellClassName}
       sx={{
-        borderBottom: '1px solid #e2e8f0',
+        borderBottom: "1px solid #e2e8f0",
         py: 2.5,
-        color: 'text.primary',
+        color: "text.primary",
       }}
     >
-      {column.Cell ? (
-        column.Cell({ value, row, rowIndex, column })
-      ) : (
-        value !== undefined && value !== null ? String(value) : ''
-      )}
+      {column.Cell
+        ? column.Cell({ value, row, rowIndex, column })
+        : value !== undefined && value !== null
+          ? String(value)
+          : ""}
     </TableCell>
   );
 };

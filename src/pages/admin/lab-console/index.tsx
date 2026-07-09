@@ -1,6 +1,6 @@
-import React from 'react';
-import Head from 'next/head';
-import { LabConsole } from '@/component_library/admin';
+import React from "react";
+import Head from "next/head";
+import { LabConsole } from "@/component_library/admin";
 
 export default function LabConsolePage() {
   return (

@@ -1,11 +1,11 @@
-import React from 'react';
-import TableHead from '@mui/material/TableHead';
-import TableCell from '@mui/material/TableCell';
-import TableSortLabel from '@mui/material/TableSortLabel';
-import Box from '@mui/material/Box';
-import { visuallyHidden } from '@mui/utils';
-import { GridHeaderProps } from './type';
-import { StyledHeaderRow } from './styles';
+import React from "react";
+import TableHead from "@mui/material/TableHead";
+import TableCell from "@mui/material/TableCell";
+import TableSortLabel from "@mui/material/TableSortLabel";
+import Box from "@mui/material/Box";
+import { visuallyHidden } from "@mui/utils";
+import { GridHeaderProps } from "./type";
+import { StyledHeaderRow } from "./styles";
 
 export const GridHeader: React.FC<GridHeaderProps> = ({
   columns,
@@ -18,18 +18,20 @@ export const GridHeader: React.FC<GridHeaderProps> = ({
       <StyledHeaderRow>
         {columns.map((column) => {
           const isSorted = sortBy === column.accessor;
-          const direction = isSorted ? (sortDirection?.toLowerCase() as 'asc' | 'desc') : 'asc';
+          const direction = isSorted
+            ? (sortDirection?.toLowerCase() as "asc" | "desc")
+            : "asc";
 
           return (
             <TableCell
               key={String(column.accessor)}
-              align={column.align || 'left'}
+              align={column.align || "left"}
               className={column.headerClassName}
               sx={{
                 width: column.width,
                 fontWeight: 700,
-                color: 'text.secondary',
-                borderBottom: '1px solid #e2e8f0',
+                color: "text.secondary",
+                borderBottom: "1px solid #e2e8f0",
                 py: 2.2,
               }}
             >
@@ -42,7 +44,9 @@ export const GridHeader: React.FC<GridHeaderProps> = ({
                   {column.header}
                   {isSorted ? (
                     <Box component="span" sx={visuallyHidden}>
-                      {direction === 'desc' ? 'sorted descending' : 'sorted ascending'}
+                      {direction === "desc"
+                        ? "sorted descending"
+                        : "sorted ascending"}
                     </Box>
                   ) : null}
                 </TableSortLabel>

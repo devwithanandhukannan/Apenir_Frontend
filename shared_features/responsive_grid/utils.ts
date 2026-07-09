@@ -1,7 +1,10 @@
-import { ColumnConfig } from './type';
+import { ColumnConfig } from "./type";
 
 // Standard debounce utility for input changes
-export function debounce<T extends (...args: any[]) => void>(func: T, wait: number): (...args: Parameters<T>) => void {
+export function debounce<T extends (...args: any[]) => void>(
+  func: T,
+  wait: number,
+): (...args: Parameters<T>) => void {
   let timeout: NodeJS.Timeout | null = null;
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout);
@@ -17,7 +20,9 @@ export const isEmptyState = (data: any[]): boolean => {
 };
 
 // Filter out columns designated as hidden
-export const getVisibleColumns = <T>(columns: ColumnConfig<T>[]): ColumnConfig<T>[] => {
+export const getVisibleColumns = <T>(
+  columns: ColumnConfig<T>[],
+): ColumnConfig<T>[] => {
   return columns.filter((col) => col.show !== false);
 };
 
@@ -30,10 +35,10 @@ export const getSkeletonRowArray = (count: number): number[] => {
 export const getNextSortDirection = (
   currentField: string,
   newField: string,
-  currentDir?: 'ASC' | 'DESC'
-): 'ASC' | 'DESC' => {
+  currentDir?: "ASC" | "DESC",
+): "ASC" | "DESC" => {
   if (currentField !== newField) {
-    return 'ASC';
+    return "ASC";
   }
-  return currentDir === 'ASC' ? 'DESC' : 'ASC';
+  return currentDir === "ASC" ? "DESC" : "ASC";
 };

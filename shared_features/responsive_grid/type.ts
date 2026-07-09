@@ -1,4 +1,4 @@
-import { ReactNode } from 'react';
+import { ReactNode } from "react";
 
 // Column Configuration interface
 export interface ColumnConfig<T = any> {
@@ -7,7 +7,7 @@ export interface ColumnConfig<T = any> {
   show?: boolean;
   sortable?: boolean;
   width?: number | string;
-  align?: 'left' | 'center' | 'right' | 'justify';
+  align?: "left" | "center" | "right" | "justify";
   Cell?: (cellProps: CellProps<T>) => ReactNode;
   headerClassName?: string;
   cellClassName?: string;
@@ -31,7 +31,7 @@ export interface FilterOption {
 export interface FilterMenuConfigItem {
   key: string;
   label: string;
-  type: 'select' | 'text';
+  type: "select" | "text";
   options: FilterOption[];
   loading?: boolean;
   disabled?: boolean;
@@ -55,7 +55,7 @@ export interface PaginationProps {
 export interface GridFilters {
   search?: string;
   sortBy?: string;
-  sortDirection?: 'ASC' | 'DESC';
+  sortDirection?: "ASC" | "DESC";
   pageNumber: number;
   pageSize: number;
   [key: string]: any; // Custom dynamic filters
@@ -66,7 +66,9 @@ export interface ResponsiveGridProps<T = any> {
   data: T[];
   loading: boolean;
   filters: GridFilters;
-  setFilters: (newFilters: GridFilters | ((prev: GridFilters) => GridFilters)) => void;
+  setFilters: (
+    newFilters: GridFilters | ((prev: GridFilters) => GridFilters),
+  ) => void;
   filterMenuConfig?: FilterMenuConfigItem[];
   columns: ColumnConfig<T>[];
   searchPlaceholder?: string;
@@ -80,7 +82,7 @@ export interface ResponsiveGridProps<T = any> {
 export interface GridHeaderProps<T = any> {
   columns: ColumnConfig<T>[];
   sortBy?: string;
-  sortDirection?: 'ASC' | 'DESC';
+  sortDirection?: "ASC" | "DESC";
   onSort: (accessor: string) => void;
 }
 
