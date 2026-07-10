@@ -4,3 +4,7 @@ export { default as LabConsole } from "./lab_console";
 export * from "./lab_console";
 export { default as LabDetails } from "./lab_details";
 export * from "./lab_details";
+export { default as StaffConsole } from "./staff_console";
+export * from "./staff_console";
+export { default as CustomerConsole } from "./customer_console";
+export * from "./customer_console";
