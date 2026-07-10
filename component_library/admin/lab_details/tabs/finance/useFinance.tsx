@@ -1,0 +1,151 @@
+import { useState, useEffect, useCallback, useMemo } from "react";
+import {
+  GridFilters,
+  PaginationProps,
+} from "@/shared_features/responsive_grid/type";
+import {
+  useLabService,
+  UnbatchedPaymentItem,
+} from "@/core_components/apis/admin/labService";
+
+export interface MappedInvoiceItem {
+  id: string;
+  invoiceNumber: string;
+  customerName: string;
+  date: string;
+  amount: number;
+  commission: number;
+  labPayout: number;
+  paymentMethod: string;
+  status: "Paid" | "Pending";
+}
+
+export const useFinance = (labId: string) => {
+  const { getUnbatchedPayments } = useLabService();
+  const [loading, setLoading] = useState(true);
+  const [invoices, setInvoices] = useState<MappedInvoiceItem[]>([]);
+
+  // Maintain grid UI filter state
+  const [filters, setFilters] = useState<GridFilters>({
+    search: "",
+    sortBy: "date",
+    sortDirection: "DESC",
+    pageNumber: 1,
+    pageSize: 5,
+    status: [],
+  });
+
+  const fetchFinance = useCallback(async () => {
+    if (!labId) return;
+    setLoading(true);
+    const response = await getUnbatchedPayments(labId);
+
+    if (response.success && response.data?.data) {
+      const apiPayments = response.data.data;
+      console.log(apiPayments);
+      // Map raw API array items to the frontend invoices structure
+      const mapped: MappedInvoiceItem[] = apiPayments.map((item) => ({
+        id: item.paymentId,
+        invoiceNumber: item.appointmentNumber,
+        customerName: item.customerName || "Customer",
+        date: item.paidAt || new Date().toISOString(),
+        amount: Number(item.totalAmount || 0),
+        commission: Number(item.platformCommission || 0),
+        labPayout: Number(item.labPayout || 0),
+        paymentMethod: item.paymentMethod || "UPI",
+        status: "Paid", // unbatched payments are received/paid invoices
+      }));
+
+      setInvoices(mapped);
+    } else {
+      setInvoices([]);
+    }
+    setLoading(false);
+  }, [labId, getUnbatchedPayments]);
+
+  useEffect(() => {
+    fetchFinance();
+  }, [fetchFinance]);
+
+  // Aggregate stats on the fly
+  const summary = useMemo(() => {
+    let totalRevenue = 0;
+    let totalPaid = 0;
+    let totalCommission = 0;
+
+    invoices.forEach((inv) => {
+      totalRevenue += inv.amount;
+      totalPaid += inv.labPayout;
+      totalCommission += inv.commission;
+    });
+
+    return {
+      totalRevenue,
+      totalPaid,
+      totalCommission,
+    };
+  }, [invoices]);
+
+  const filteredInvoices = useMemo(() => {
+    return invoices
+      .filter((inv) => {
+        if (filters.search) {
+          const query = filters.search.toLowerCase();
+          const matchesSearch =
+            inv.invoiceNumber.toLowerCase().includes(query) ||
+            inv.customerName.toLowerCase().includes(query) ||
+            inv.paymentMethod.toLowerCase().includes(query);
+          if (!matchesSearch) return false;
+        }
+
+        if (filters.status && filters.status.length > 0) {
+          if (!filters.status.includes(inv.status)) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        const field = (filters.sortBy || "date") as keyof MappedInvoiceItem;
+        const dir = filters.sortDirection === "DESC" ? -1 : 1;
+
+        const valA = a[field];
+        const valB = b[field];
+
+        if (typeof valA === "string" && typeof valB === "string") {
+          return valA.localeCompare(valB) * dir;
+        }
+        if (typeof valA === "number" && typeof valB === "number") {
+          return (valA - valB) * dir;
+        }
+        return 0;
+      });
+  }, [invoices, filters]);
+
+  // Pagination parameters
+  const pagination: PaginationProps = useMemo(
+    () => ({
+      pageNumber: filters.pageNumber,
+      pageSize: filters.pageSize,
+      pageCount: Math.ceil(filteredInvoices.length / filters.pageSize) || 1,
+      totalRows: filteredInvoices.length,
+    }),
+    [filters.pageNumber, filters.pageSize, filteredInvoices.length],
+  );
+
+  // Slice paginated block
+  const paginatedData = useMemo(() => {
+    const start = (filters.pageNumber - 1) * filters.pageSize;
+    return filteredInvoices.slice(start, start + filters.pageSize);
+  }, [filteredInvoices, filters.pageNumber, filters.pageSize]);
+
+  return {
+    paginatedData,
+    loading,
+    filters,
+    setFilters,
+    pagination,
+    summary,
+  };
+};
+
+export default useFinance;
