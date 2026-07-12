@@ -29,6 +29,10 @@ import HelpIcon from "@mui/icons-material/Help";
 import AddIcon from "@mui/icons-material/Add";
 import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
+import EventNoteIcon from "@mui/icons-material/EventNote";
+import BatchPredictionIcon from "@mui/icons-material/BatchPrediction";
+import InsightsIcon from "@mui/icons-material/Insights";
+import HomeIcon from "@mui/icons-material/Home";
 
 const DRAWER_WIDTH = 250;
 
@@ -65,6 +69,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const isActive = (path: string) => {
     if (path === "/admin") {
       return router.pathname === "/admin";
+    }
+    if (path === "/lab/lab-console") {
+      return router.pathname === "/lab/lab-console";
     }
     if (path === "/") {
       return router.pathname === "/";
@@ -122,6 +129,45 @@ export const Sidebar: React.FC<SidebarProps> = ({
       text: "Analytics",
       path: "/analytics-console",
       icon: <BarChartIcon fontSize="small" />,
+    },
+  ];
+
+  // Define lab navigation list
+  const labMenuItems = [
+    {
+      text: "Home",
+      path: "/lab/lab-console",
+      icon: <HomeIcon fontSize="small" />,
+    },
+    {
+      text: "Appointments",
+      path: "/lab/appointments",
+      icon: <EventNoteIcon fontSize="small" />,
+    },
+    {
+      text: "Staff",
+      path: "/lab/staff",
+      icon: <PeopleIcon fontSize="small" />,
+    },
+    {
+      text: "Packages",
+      path: "/lab/packages",
+      icon: <InventoryIcon fontSize="small" />,
+    },
+    {
+      text: "Services",
+      path: "/lab/services",
+      icon: <LayersIcon fontSize="small" />,
+    },
+    {
+      text: "Payment & Batch",
+      path: "/lab/payment-batch",
+      icon: <BatchPredictionIcon fontSize="small" />,
+    },
+    {
+      text: "Insights",
+      path: "/lab/insights",
+      icon: <InsightsIcon fontSize="small" />,
     },
   ];
 
@@ -195,7 +241,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 color="text.primary"
                 className="font-extrabold tracking-tight"
               >
-                Appenir<span className="text-secondary"> MS</span>
+                Appenir
+                <span className="text-secondary">
+                  {isAuthenticated && user?.role === "lab" ? " Lab" : " MS"}
+                </span>
               </Typography>
             )}
           </Box>
@@ -205,7 +254,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
               color="text.secondary"
               sx={{ fontWeight: 600, pl: 4, letterSpacing: "0.2px" }}
             >
-              Admin Console
+              {isAuthenticated && user?.role === "lab"
+                ? "Lab Console"
+                : isAuthenticated && user?.role === "admin"
+                  ? "Admin Console"
+                  : "Portal"}
             </Typography>
           )}
         </Box>
@@ -280,8 +333,73 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 );
               })}
             </List>
+          ) : isAuthenticated && user && user.role === "lab" ? (
+            <List component="nav" sx={{ p: 0 }}>
+              {labMenuItems.map((item) => {
+                const active = isActive(item.path);
+                const buttonContent = (
+                  <ListItemButton
+                    selected={active}
+                    onClick={() => handleNavigate(item.path)}
+                    sx={{
+                      borderRadius: "8px",
+                      mb: 0.5,
+                      py: 1,
+                      px: isCollapsed ? 0 : 2,
+                      justifyContent: isCollapsed ? "center" : "flex-start",
+                      color: active ? "#00897b" : "text.secondary",
+                      bgcolor: active
+                        ? "rgba(0, 137, 123, 0.08)"
+                        : "transparent",
+                      "&.Mui-selected": {
+                        bgcolor: "rgba(0, 137, 123, 0.1)",
+                        color: "#00695c",
+                        "& .MuiListItemIcon-root": { color: "#00695c" },
+                      },
+                      "&:hover": {
+                        bgcolor: active
+                          ? "rgba(0, 137, 123, 0.12)"
+                          : "rgba(0, 0, 0, 0.04)",
+                      },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: isCollapsed ? 0 : 32,
+                        justifyContent: "center",
+                        color: active ? "#00897b" : "text.secondary",
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    {!isCollapsed && (
+                      <ListItemText
+                        primary={
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: active ? 700 : 500 }}
+                          >
+                            {item.text}
+                          </Typography>
+                        }
+                      />
+                    )}
+                  </ListItemButton>
+                );
+
+                return isCollapsed ? (
+                  <Tooltip key={item.text} title={item.text} placement="right">
+                    <Box>{buttonContent}</Box>
+                  </Tooltip>
+                ) : (
+                  <React.Fragment key={item.text}>
+                    {buttonContent}
+                  </React.Fragment>
+                );
+              })}
+            </List>
           ) : (
-            // Fallback for customer or lab roles
+            // Fallback for customer or other roles
             <List component="nav" sx={{ p: 0 }}>
               {isCollapsed ? (
                 <Tooltip title="Home Portal" placement="right">
@@ -326,10 +444,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               {isAuthenticated &&
                 user &&
                 (isCollapsed ? (
-                  <Tooltip
-                    title={user.role === "lab" ? "Lab Work" : "My Account"}
-                    placement="right"
-                  >
+                  <Tooltip title="My Account" placement="right">
                     <Box>
                       <ListItemButton
                         selected={isActive(`/${user.role}`)}
@@ -345,11 +460,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <ListItemIcon
                           sx={{ minWidth: 0, justifyContent: "center" }}
                         >
-                          {user.role === "lab" ? (
-                            <ScienceIcon fontSize="small" />
-                          ) : (
-                            <PersonIcon fontSize="small" />
-                          )}
+                          <PersonIcon fontSize="small" />
                         </ListItemIcon>
                       </ListItemButton>
                     </Box>
@@ -361,16 +472,12 @@ export const Sidebar: React.FC<SidebarProps> = ({
                     sx={{ borderRadius: "8px", mb: 0.5 }}
                   >
                     <ListItemIcon sx={{ minWidth: 32 }}>
-                      {user.role === "lab" ? (
-                        <ScienceIcon fontSize="small" />
-                      ) : (
-                        <PersonIcon fontSize="small" />
-                      )}
+                      <PersonIcon fontSize="small" />
                     </ListItemIcon>
                     <ListItemText
                       primary={
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          {user.role === "lab" ? "Lab Work" : "My Account"}
+                          My Account
                         </Typography>
                       }
                     />

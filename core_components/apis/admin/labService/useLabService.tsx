@@ -2,7 +2,137 @@ import { useCallback } from "react";
 import {
   useApi,
   BaseRequestOptions,
+  MutationRequestOptions,
 } from "@/core_components/hooks/useApi/useApi";
+
+// ---------- Lab User API Types ----------
+export interface LabLoginRequest {
+  email: string;
+  password: string;
+}
+
+export interface LabLoginResponseData {
+  accessToken: string;
+  expiresIn: number;
+  labId: string;
+  email: string;
+}
+
+export interface LabLoginResponse {
+  success: boolean;
+  message: string;
+  data: LabLoginResponseData;
+  errors: any[];
+}
+
+export interface LabStaffMember {
+  id: string;
+  name: string | null;
+  email: string | null;
+  phone: string | null;
+  role: string | number;
+  isActive: boolean | null;
+  status: string | null;
+  createdAt: string | null;
+}
+
+export interface LabStaffListResponse {
+  success: boolean;
+  message: string;
+  data:
+    LabStaffMember[] | { items: LabStaffMember[]; totalRows?: number } | any;
+  errors: string[];
+}
+
+export interface LabAppointmentItem {
+  id: string;
+  appointmentNumber: string;
+  customerUserId: string;
+  branchId: string;
+  appointmentSlotId: string;
+  locationLatitude: number;
+  locationLongitude: number;
+  locationAddress: string;
+  passcode: string;
+  status: number;
+  totalAmount: number;
+  platformCommission: number;
+  labPayout: number;
+  assignedStaffId: string | null;
+  createdAt: string;
+  updatedAt: string | null;
+  memberCount: number;
+  landmark: string | null;
+  buildingDetails: string | null;
+  floor: string | null;
+  reportPdfPath: string | null;
+  customerUser: any | null;
+  branch: any | null;
+  appointmentSlot: any | null;
+  assignedStaff: any | null;
+}
+
+export interface CurrentLabAppointmentsResponse {
+  success: boolean;
+  message: string;
+  data: LabAppointmentItem[];
+  errors: string[];
+}
+
+export interface LabServiceItem {
+  branchServiceId: string;
+  serviceId: string;
+  name: string;
+  category: string;
+  description: string;
+  basePrice: number;
+  customPrice: number | null;
+  customCommissionPct: number | null;
+  isActive: boolean;
+}
+
+export interface CurrentLabServicesResponse {
+  success: boolean;
+  message: string;
+  data: LabServiceItem[];
+  errors: string[];
+}
+
+export interface LabPaymentBatchItem {
+  id: string;
+  batchNumber: string;
+  totalGrossAmount: number;
+  totalPlatformCommission: number;
+  totalNetPayout: number;
+  status: number;
+  createdAt: string;
+  updatedAt: string | null;
+  paymentCount?: number;
+}
+
+export interface LabPaymentBatchListResponse {
+  success: boolean;
+  message: string;
+  data: LabPaymentBatchItem[];
+  errors: string[];
+}
+
+export interface GetLabPaymentBatchDetailsResponse {
+  success: boolean;
+  message: string;
+  data: {
+    id: string;
+    batchNumber: string;
+    status: number;
+    totalNetPayout: number;
+    totalGrossAmount: number;
+    totalPlatformCommission: number;
+    createdAt: string;
+    updatedAt: string | null;
+    appointments: any[];
+  };
+  errors: string[];
+}
 
 // Schema mapping the properties of a Lab returned by the API
 export interface LabItem {
@@ -208,7 +338,7 @@ export interface InviteLabResponse {
 }
 
 export function useLabService() {
-  const { get, post, delete: del } = useApi();
+  const { get, post, put, delete: del } = useApi();
 
   // API Caller to load labs list
   const getLabs = useCallback(
@@ -513,6 +643,399 @@ export function useLabService() {
     [post],
   );
 
+  // API Caller to login as lab user
+  const labLogin = useCallback(
+    async (
+      payload: LabLoginRequest,
+      options?: Omit<
+        MutationRequestOptions<LabLoginResponse, LabLoginRequest>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<LabLoginResponse, LabLoginRequest>({
+        endpoint: "/api/lab/login",
+        body: payload,
+        requireAuth: false,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
+  // API Caller to get staff of currently logged in lab
+  const getCurrentLabStaff = useCallback(
+    async (
+      options?: Omit<
+        BaseRequestOptions<LabStaffListResponse>,
+        "endpoint" | "requireAuth"
+      >,
+    ) => {
+      const response = await get<LabStaffListResponse>({
+        endpoint: "/api/lab/staff",
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
+  // API Caller to add staff member to currently logged in lab
+  const addCurrentLabStaff = useCallback(
+    async (
+      payload: { name: string; email: string },
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: "/api/lab/staff/invite",
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
+  // API Caller to get appointments of currently logged in lab
+  const getCurrentLabAppointments = useCallback(
+    async (
+      options?: Omit<
+        BaseRequestOptions<CurrentLabAppointmentsResponse>,
+        "endpoint" | "requireAuth"
+      >,
+    ) => {
+      const response = await get<CurrentLabAppointmentsResponse>({
+        endpoint: "/api/lab/appointments",
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
+  // API Caller to assign staff to an appointment
+  const assignStaffToAppointment = useCallback(
+    async (
+      appointmentId: string,
+      payload: { staffId: string | null },
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: `/api/lab/appointments/${appointmentId}/assign-staff`,
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
+  // API Caller to get services of currently logged in lab
+  const getCurrentLabServices = useCallback(
+    async (
+      options?: Omit<
+        BaseRequestOptions<CurrentLabServicesResponse>,
+        "endpoint" | "requireAuth"
+      >,
+    ) => {
+      const response = await get<CurrentLabServicesResponse>({
+        endpoint: "/api/lab/services",
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
+  // API Caller to update staff member details of currently logged in lab
+  const updateCurrentLabStaff = useCallback(
+    async (
+      staffId: string,
+      payload: {
+        id?: string;
+        name: string;
+        email: string;
+        phone: string;
+        isActive: boolean;
+      },
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await put<any, any>({
+        endpoint: `/api/lab/staff/${staffId}`,
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [put],
+  );
+
+  // API Caller to delete staff member of currently logged in lab
+  const deleteCurrentLabStaff = useCallback(
+    async (
+      staffId: string,
+      options?: Omit<BaseRequestOptions<any>, "endpoint" | "requireAuth">,
+    ) => {
+      const response = await del<any>({
+        endpoint: `/api/lab/staff/${staffId}`,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [del],
+  );
+
+  // API Caller to list all payment batches of currently logged in lab
+  const getCurrentLabPaymentBatches = useCallback(
+    async (
+      payload?: any,
+      options?: Omit<
+        MutationRequestOptions<LabPaymentBatchListResponse, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<LabPaymentBatchListResponse, any>({
+        endpoint: "/api/lab/payment-batches/list",
+        body: payload || {},
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
+  // API Caller to get details of a specific payment batch
+  const getCurrentLabPaymentBatchDetails = useCallback(
+    async (
+      batchId: string,
+      options?: Omit<
+        BaseRequestOptions<GetLabPaymentBatchDetailsResponse>,
+        "endpoint" | "requireAuth"
+      >,
+    ) => {
+      const response = await get<GetLabPaymentBatchDetailsResponse>({
+        endpoint: `/api/lab/payment-batches/${batchId}`,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
+  // API Caller to confirm receipt of batch payout payments at lab end
+  const confirmBatchReceipt = useCallback(
+    async (
+      batchId: string,
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: `/api/lab/payment-batches/${batchId}/confirm-receipt`,
+        body: {},
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
+  // API Caller to reject batch receipt at lab end
+  const rejectBatchReceipt = useCallback(
+    async (
+      batchId: string,
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: `/api/lab/payment-batches/${batchId}/reject`,
+        body: {},
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
   return {
     getLabs,
     getLabStaff,
@@ -523,6 +1046,18 @@ export function useLabService() {
     getBatchDetails,
     deleteBatchPayment,
     inviteLab,
+    labLogin,
+    getCurrentLabStaff,
+    addCurrentLabStaff,
+    getCurrentLabAppointments,
+    assignStaffToAppointment,
+    getCurrentLabServices,
+    updateCurrentLabStaff,
+    deleteCurrentLabStaff,
+    getCurrentLabPaymentBatches,
+    getCurrentLabPaymentBatchDetails,
+    confirmBatchReceipt,
+    rejectBatchReceipt,
   };
 }
 
