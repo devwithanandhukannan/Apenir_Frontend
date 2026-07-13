@@ -1,6 +1,7 @@
 import React from "react";
 import { useRouter } from "next/router";
 import { useAppSelector } from "@/core_components/store/hooks";
+import { useTheme } from "@mui/material/styles";
 import Drawer from "@mui/material/Drawer";
 import List from "@mui/material/List";
 import ListItemButton from "@mui/material/ListItemButton";
@@ -47,6 +48,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
 }) => {
   const router = useRouter();
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
+  const theme = useTheme();
 
   const [localIsCollapsed, setLocalIsCollapsed] = React.useState(false);
   const isCollapsed =
@@ -282,19 +284,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       py: 1,
                       px: isCollapsed ? 0 : 2,
                       justifyContent: isCollapsed ? "center" : "flex-start",
-                      color: active ? "primary.main" : "text.secondary",
+                      color: active ? "secondary.main" : "text.secondary",
                       bgcolor: active
-                        ? "rgba(var(--color-primary), 0.08)"
+                        ? theme.palette.mode === "light"
+                          ? "rgba(16, 185, 129, 0.08)"
+                          : "rgba(16, 185, 129, 0.15)"
                         : "transparent",
                       "&.Mui-selected": {
-                        bgcolor: "primary.light",
-                        color: "primary.dark",
-                        "& .MuiListItemIcon-root": { color: "primary.dark" },
+                        bgcolor:
+                          theme.palette.mode === "light"
+                            ? "rgba(16, 185, 129, 0.08)"
+                            : "rgba(16, 185, 129, 0.15)",
+                        color: "secondary.main",
+                        "& .MuiListItemIcon-root": { color: "secondary.main" },
                       },
                       "&:hover": {
                         bgcolor: active
-                          ? "primary.light"
-                          : "rgba(0, 0, 0, 0.04)",
+                          ? theme.palette.mode === "light"
+                            ? "rgba(16, 185, 129, 0.12)"
+                            : "rgba(16, 185, 129, 0.22)"
+                          : theme.palette.mode === "light"
+                            ? "rgba(0, 0, 0, 0.04)"
+                            : "rgba(255, 255, 255, 0.04)",
                       },
                     }}
                   >
@@ -302,7 +313,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       sx={{
                         minWidth: isCollapsed ? 0 : 32,
                         justifyContent: "center",
-                        color: active ? "primary.main" : "text.secondary",
+                        color: active ? "secondary.main" : "text.secondary",
                       }}
                     >
                       {item.icon}
@@ -347,19 +358,28 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       py: 1,
                       px: isCollapsed ? 0 : 2,
                       justifyContent: isCollapsed ? "center" : "flex-start",
-                      color: active ? "#00897b" : "text.secondary",
+                      color: active ? "secondary.main" : "text.secondary",
                       bgcolor: active
-                        ? "rgba(0, 137, 123, 0.08)"
+                        ? theme.palette.mode === "light"
+                          ? "rgba(16, 185, 129, 0.08)"
+                          : "rgba(16, 185, 129, 0.15)"
                         : "transparent",
                       "&.Mui-selected": {
-                        bgcolor: "rgba(0, 137, 123, 0.1)",
-                        color: "#00695c",
-                        "& .MuiListItemIcon-root": { color: "#00695c" },
+                        bgcolor:
+                          theme.palette.mode === "light"
+                            ? "rgba(16, 185, 129, 0.08)"
+                            : "rgba(16, 185, 129, 0.15)",
+                        color: "secondary.main",
+                        "& .MuiListItemIcon-root": { color: "secondary.main" },
                       },
                       "&:hover": {
                         bgcolor: active
-                          ? "rgba(0, 137, 123, 0.12)"
-                          : "rgba(0, 0, 0, 0.04)",
+                          ? theme.palette.mode === "light"
+                            ? "rgba(16, 185, 129, 0.12)"
+                            : "rgba(16, 185, 129, 0.22)"
+                          : theme.palette.mode === "light"
+                            ? "rgba(0, 0, 0, 0.04)"
+                            : "rgba(255, 255, 255, 0.04)",
                       },
                     }}
                   >
@@ -367,7 +387,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                       sx={{
                         minWidth: isCollapsed ? 0 : 32,
                         justifyContent: "center",
-                        color: active ? "#00897b" : "text.secondary",
+                        color: active ? "secondary.main" : "text.secondary",
                       }}
                     >
                       {item.icon}

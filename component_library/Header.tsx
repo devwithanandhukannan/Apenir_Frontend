@@ -81,31 +81,7 @@ export const Header: React.FC<HeaderProps> = ({ isCollapsed = false }) => {
       }}
       className="backdrop-blur-md bg-paper/85 border-b border-border"
     >
-      <Toolbar sx={{ justifyContent: "space-between" }}>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Avatar
-            sx={{ bgcolor: "secondary.main", width: 32, height: 32 }}
-            className="bg-secondary"
-          >
-            A
-          </Avatar>
-          <Typography
-            variant="h6"
-            noWrap
-            component="div"
-            sx={{
-              fontWeight: 800,
-              letterSpacing: "-0.5px",
-              fontSize: "0.95rem",
-            }}
-            color="primary"
-            className="font-extrabold text-primary tracking-tight cursor-pointer"
-            onClick={() => router.push("/")}
-          >
-            Appenir
-          </Typography>
-        </Box>
-
+      <Toolbar sx={{ justifyContent: "flex-end" }}>
         <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
           {/* User Details & Dropdown option */}
           {isAuthenticated && user ? (
