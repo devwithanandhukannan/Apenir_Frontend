@@ -398,7 +398,7 @@ export function useLabService() {
     ) => {
       const response = await post<LabsResponse, any>({
         endpoint: "/api/admin/labs",
-        body: null, // As specified in curl --data 'null'
+        body: {}, // Send empty object; backend treats missing fields as no-filter (SearchLabsRequest? is nullable)
         requireAuth: true,
         signal: options?.signal,
         onSuccess: (data) => {

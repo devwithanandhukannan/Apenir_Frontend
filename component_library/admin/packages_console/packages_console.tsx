@@ -34,6 +34,7 @@ interface ServicePublicDto {
   category: string;
   basePrice: number;
   isActive: boolean;
+  createdByBranchId?: string | null;
 }
 
 interface PackageItem {
@@ -213,12 +214,15 @@ export const PackagesConsole: React.FC = () => {
     setLoading(true);
     const [pkgRes, svcRes] = await Promise.all([
       get<any>({ endpoint: "/api/packages/admin", requireAuth: true }),
-      get<any>({ endpoint: "/api/services", requireAuth: true }),
+      get<any>({ endpoint: "/api/services/all", requireAuth: true }),
     ]);
     if (pkgRes.success && pkgRes.data?.data) setPackages(pkgRes.data.data);
     if (svcRes.success && svcRes.data?.data)
       setAllServices(
-        svcRes.data.data.filter((s: ServicePublicDto) => s.isActive),
+        // Only master services (createdByBranchId == null) can be added to admin packages
+        svcRes.data.data.filter(
+          (s: ServicePublicDto) => s.isActive && !s.createdByBranchId,
+        ),
       );
     setLoading(false);
   }, [get]);
