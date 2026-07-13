@@ -1,14 +1,14 @@
 export const lightThemeColors = {
-  primary: '#1e40af',       // Deep Blue
-  secondary: '#0f766e',     // Teal
-  background: '#f8fafc',    // Slate-50
-  paper: '#ffffff',         // White
-  textPrimary: '#0f172a',   // Slate-900
-  textSecondary: '#475569',  // Slate-600
-  border: '#cbd5e1',        // Slate-300
-  divider: '#e2e8f0',       // Slate-200
-  error: '#ef4444',         // Red-500
-  warning: '#f59e0b',       // Amber-500
-  success: '#10b981',       // Emerald-500
-  info: '#3b82f6',          // Blue-500
+  primary: "#059669", // Clinical Green (Emerald-600)
+  secondary: "#10b981", // Emerald-500
+  background: "#f9fafb", // Slate Light Background (Gray-50)
+  paper: "#ffffff", // Pure White Card
+  textPrimary: "#111827", // Dark Charcoal Text (Gray-900)
+  textSecondary: "#4b5563", // Slate Secondary Text (Gray-600)
+  border: "#e5e7eb", // Slate Border (Gray-200)
+  divider: "#f3f4f6", // Light Divider (Gray-100)
+  error: "#ef4444", // Red-500
+  warning: "#f59e0b", // Amber-500
+  success: "#10b981", // Emerald-500
+  info: "#3b82f6", // Blue-500
 };

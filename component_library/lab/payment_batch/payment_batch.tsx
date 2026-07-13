@@ -83,7 +83,7 @@ export const PaymentBatch: React.FC = () => {
         Cell: ({ row }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {row.batchNumber || `BAT-${row.id.substring(0, 8).toUpperCase()}`}
           </Typography>
@@ -395,7 +395,7 @@ export const PaymentBatch: React.FC = () => {
               <Box>
                 <Typography
                   variant="subtitle2"
-                  sx={{ fontWeight: 800, mb: 1, color: "#0f172a" }}
+                  sx={{ fontWeight: 800, mb: 1, color: "text.primary" }}
                 >
                   Associated Appointments
                 </Typography>

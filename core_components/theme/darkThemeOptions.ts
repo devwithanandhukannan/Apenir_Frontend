@@ -1,14 +1,14 @@
 export const darkThemeColors = {
-  primary: '#3b82f6',       // Bright Blue
-  secondary: '#14b8a6',     // Bright Teal
-  background: '#0f172a',    // Dark Slate-900
-  paper: '#1e293b',         // Slate-800
-  textPrimary: '#f8fafc',   // Slate-50
-  textSecondary: '#94a3b8',  // Slate-400
-  border: '#334155',        // Slate-700
-  divider: '#1e293b',       // Slate-800/900
-  error: '#f87171',         // Red-400
-  warning: '#fbbf24',       // Amber-400
-  success: '#34d399',       // Emerald-400
-  info: '#60a5fa',          // Blue-400
+  primary: "#10b981", // Vibrant Clinical Green (Emerald-500)
+  secondary: "#34d399", // Clinical Light Green (Emerald-400)
+  background: "#040d0a", // Deep Forest/Matte Green-Black Background
+  paper: "#0b1712", // Dark Forest Card Panel
+  textPrimary: "#f0fbf7", // Crisp Mint White Text
+  textSecondary: "#89a59a", // Muted Mint Grey Text
+  border: "#162e24", // Deep Clinical Green Border
+  divider: "#0f221a", // Subtle Green-Black Divider
+  error: "#f87171", // Red-400
+  warning: "#fbbf24", // Amber-400
+  success: "#10b981", // Emerald-500
+  info: "#60a5fa", // Blue-400
 };

@@ -194,7 +194,7 @@ export const useStaffConsole = () => {
           return (
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               {idLabel}
             </Typography>
@@ -213,7 +213,7 @@ export const useStaffConsole = () => {
             </Avatar>
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               {row.name || "—"}
             </Typography>
@@ -228,7 +228,7 @@ export const useStaffConsole = () => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 600, color: "#0f172a" }}
+            sx={{ fontWeight: 600, color: "text.primary" }}
           >
             {value || "—"}
           </Typography>
@@ -242,7 +242,7 @@ export const useStaffConsole = () => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {value || "—"}
           </Typography>

@@ -17,14 +17,14 @@
 
 :root {
   /* Fallback values for server-side render / pre-hydration */
-  --color-primary: #1e40af;
-  --color-secondary: #0f766e;
-  --color-background: #f8fafc;
+  --color-primary: #059669;
+  --color-secondary: #10b981;
+  --color-background: #f9fafb;
   --color-paper: #ffffff;
-  --color-text-primary: #0f172a;
-  --color-text-secondary: #475569;
-  --color-border: #cbd5e1;
-  --color-divider: #e2e8f0;
+  --color-text-primary: #111827;
+  --color-text-secondary: #4b5563;
+  --color-border: #e5e7eb;
+  --color-divider: #f3f4f6;
   --color-error: #ef4444;
   --color-warning: #f59e0b;
   --color-success: #10b981;

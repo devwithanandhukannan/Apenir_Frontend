@@ -164,6 +164,54 @@ export interface LabsResponse {
   errors: string[];
 }
 
+export interface LabDetailsResponseData {
+  id: string;
+  name: string;
+  district: string;
+  city: string;
+  pincode: string;
+  latitude: number;
+  longitude: number;
+  phone: string;
+  isActive: boolean;
+  status: string | null;
+  labId: string | null;
+  createdAt: string;
+  contactPerson: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    status: string;
+  } | null;
+  staff: StaffItem[];
+  stats: {
+    totalAppointments: number;
+    completedAppointments: number;
+    pendingAppointments: number;
+    totalRevenue: number;
+    totalLabPayout: number;
+    totalStaffCount: number;
+    totalServicesCount: number;
+    activeSlotsCount: number;
+  };
+}
+
+export interface LabDetailsResponse {
+  success: boolean;
+  message: string;
+  data: LabDetailsResponseData;
+  errors: string[];
+}
+
+export interface ServiceCreateRequest {
+  name: string;
+  description?: string;
+  category: string;
+  basePrice: number;
+  platformCommissionPct: number;
+}
+
 // Schema mapping individual staff members associated with a lab
 export interface StaffItem {
   id: string;
@@ -1036,6 +1084,105 @@ export function useLabService() {
     [post],
   );
 
+  // Get lab details including manager and stats
+  const getLabDetails = useCallback(
+    async (
+      labId: string,
+      options?: Omit<
+        BaseRequestOptions<LabDetailsResponse>,
+        "endpoint" | "requireAuth"
+      >,
+    ) => {
+      const response = await get<LabDetailsResponse>({
+        endpoint: `/api/admin/labs/${labId}/details`,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
+  // Update lab status (activate/deactivate)
+  const updateLabStatus = useCallback(
+    async (
+      labId: string,
+      isActive: boolean,
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await put<any, any>({
+        endpoint: `/api/admin/labs/${labId}/status`,
+        body: { isActive },
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [put],
+  );
+
+  // Add new service
+  const addService = useCallback(
+    async (
+      payload: ServiceCreateRequest,
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: "/api/services",
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
   return {
     getLabs,
     getLabStaff,
@@ -1058,6 +1205,9 @@ export function useLabService() {
     getCurrentLabPaymentBatchDetails,
     confirmBatchReceipt,
     rejectBatchReceipt,
+    getLabDetails,
+    updateLabStatus,
+    addService,
   };
 }
 

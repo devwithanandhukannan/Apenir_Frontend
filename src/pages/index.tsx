@@ -203,7 +203,7 @@ export default function Home() {
                       color="primary"
                       onClick={() => simulateLogin("customer")}
                       startIcon={<PersonIcon />}
-                      sx={{ py: 1.5, background: "#1e40af" }}
+                      sx={{ py: 1.5, background: "#059669" }}
                       className="bg-blue-800"
                     >
                       Login as Customer

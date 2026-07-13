@@ -125,7 +125,7 @@ export const Appointments: React.FC = () => {
           <Box sx={{ display: "flex", flexDirection: "column" }}>
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a", lineHeight: 1.25 }}
+              sx={{ fontWeight: 800, color: "text.primary", lineHeight: 1.25 }}
             >
               {row.locationAddress || "Address N/A"}
             </Typography>
@@ -169,7 +169,7 @@ export const Appointments: React.FC = () => {
           <Box sx={{ display: "flex", flexDirection: "column" }}>
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               Payout: ₹{row.labPayout}
             </Typography>
@@ -192,13 +192,13 @@ export const Appointments: React.FC = () => {
             label={value || "—"}
             size="small"
             icon={
-              <LockOpenIcon style={{ fontSize: "11px", color: "#0f766e" }} />
+              <LockOpenIcon style={{ fontSize: "11px", color: "#10b981" }} />
             }
             sx={{
               fontWeight: 700,
               fontSize: "11px",
               borderRadius: "6px",
-              color: "#0f766e",
+              color: "#10b981",
               borderColor: "rgba(15, 118, 110, 0.25)",
               backgroundColor: "rgba(15, 118, 110, 0.04)",
               px: 0.5,

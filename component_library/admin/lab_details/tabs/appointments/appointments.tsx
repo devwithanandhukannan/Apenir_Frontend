@@ -33,7 +33,7 @@ export const LabAppointmentsTab: React.FC<LabAppointmentsTabProps> = ({
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {value}
           </Typography>
@@ -47,7 +47,7 @@ export const LabAppointmentsTab: React.FC<LabAppointmentsTabProps> = ({
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 700, color: "#0f172a" }}
+            sx={{ fontWeight: 700, color: "text.primary" }}
           >
             {value}
           </Typography>
@@ -101,7 +101,7 @@ export const LabAppointmentsTab: React.FC<LabAppointmentsTabProps> = ({
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             ₹{(value || 0).toLocaleString()}
           </Typography>

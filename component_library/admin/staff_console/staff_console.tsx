@@ -364,7 +364,7 @@ const DetailRow: React.FC<{
     >
       {label}
     </Typography>
-    <Typography variant="body2" sx={{ fontWeight: 700, color: "#0f172a" }}>
+    <Typography variant="body2" sx={{ fontWeight: 700, color: "text.primary" }}>
       {value}
     </Typography>
   </Box>

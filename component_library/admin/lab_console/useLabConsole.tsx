@@ -52,7 +52,7 @@ export const useLabConsole = () => {
 
   useEffect(() => {
     fetchLabs();
-  }, [fetchLabs]);
+  }, []);
 
   // Dynamic status mapping based on isActive boolean and status fields
   const getLabStatus = useCallback(
@@ -163,7 +163,7 @@ export const useLabConsole = () => {
           return (
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               {idLabel}
             </Typography>
@@ -182,7 +182,7 @@ export const useLabConsole = () => {
             </Avatar>
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               {value}
             </Typography>
@@ -197,7 +197,7 @@ export const useLabConsole = () => {
           <Box sx={{ display: "flex", flexDirection: "column" }}>
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a", lineHeight: 1.25 }}
+              sx={{ fontWeight: 800, color: "text.primary", lineHeight: 1.25 }}
             >
               {row.city}
             </Typography>
@@ -218,7 +218,7 @@ export const useLabConsole = () => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {value || "N/A"}
           </Typography>

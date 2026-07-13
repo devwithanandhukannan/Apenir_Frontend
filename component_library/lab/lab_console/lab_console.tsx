@@ -36,12 +36,12 @@ import PrecisionManufacturingIcon from "@mui/icons-material/PrecisionManufacturi
 // ---------- Helpers ----------
 const METRIC_CONFIG: Record<string, { icon: React.ReactNode; bg: string }> = {
   "SAMPLES TODAY": {
-    icon: <ScienceIcon sx={{ color: "#1e40af" }} />,
-    bg: "#dbeafe",
+    icon: <ScienceIcon sx={{ color: "#059669" }} />,
+    bg: "rgba(5, 150, 105, 0.08)",
   },
   "TESTS COMPLETED": {
-    icon: <BiotechIcon sx={{ color: "#0f766e" }} />,
-    bg: "#ccfbf1",
+    icon: <BiotechIcon sx={{ color: "#10b981" }} />,
+    bg: "rgba(16, 185, 129, 0.08)",
   },
   "PENDING RESULTS": {
     icon: <PendingActionsIcon sx={{ color: "#475569" }} />,
@@ -681,7 +681,7 @@ export const LabConsole: React.FC = () => {
                         <TableCell>
                           <Typography
                             variant="body2"
-                            sx={{ fontWeight: 800, color: "#0f172a" }}
+                            sx={{ fontWeight: 800, color: "text.primary" }}
                           >
                             {sample.sampleId}
                           </Typography>
@@ -867,7 +867,7 @@ export const LabConsole: React.FC = () => {
                           </Typography>
                           <Typography
                             variant="caption"
-                            sx={{ fontWeight: 700, color: "#0f172a" }}
+                            sx={{ fontWeight: 700, color: "text.primary" }}
                           >
                             {eq.utilization}%
                           </Typography>

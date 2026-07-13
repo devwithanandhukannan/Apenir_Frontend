@@ -39,9 +39,9 @@ export default function AdminDashboard() {
   const getMetricIcon = (title: string) => {
     switch (title) {
       case "TOTAL SAMPLES":
-        return <ScienceIcon sx={{ color: "#1e40af" }} />;
+        return <ScienceIcon sx={{ color: "#059669" }} />;
       case "DAILY REVENUE":
-        return <PaidIcon sx={{ color: "#0f766e" }} />;
+        return <PaidIcon sx={{ color: "#10b981" }} />;
       case "PENDING REPORTS":
         return <DescriptionIcon sx={{ color: "#475569" }} />;
       case "CRITICAL ALERTS":
@@ -55,9 +55,9 @@ export default function AdminDashboard() {
   const getMetricIconBg = (title: string) => {
     switch (title) {
       case "TOTAL SAMPLES":
-        return "#dbeafe"; // light blue
+        return "rgba(5, 150, 105, 0.08)"; // light blue
       case "DAILY REVENUE":
-        return "#ccfbf1"; // light teal
+        return "rgba(16, 185, 129, 0.08)"; // light teal
       case "PENDING REPORTS":
         return "#f1f5f9"; // light slate
       case "CRITICAL ALERTS":

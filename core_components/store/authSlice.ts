@@ -1,6 +1,6 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice, PayloadAction } from "@reduxjs/toolkit";
 
-export type UserRole = 'admin' | 'lab' | 'customer';
+export type UserRole = "admin" | "lab" | "customer";
 
 export interface User {
   id: string;
@@ -24,19 +24,22 @@ const initialState: AuthState = {
 };
 
 const authSlice = createSlice({
-  name: 'auth',
+  name: "auth",
   initialState,
   reducers: {
-    loginSuccess: (state, action: PayloadAction<{ user: User; token: string }>) => {
+    loginSuccess: (
+      state,
+      action: PayloadAction<{ user: User; token: string }>,
+    ) => {
       state.user = action.payload.user;
       state.token = action.payload.token;
       state.isAuthenticated = true;
       state.isInitialized = true;
-      
+
       // Save session info to localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('auth_user', JSON.stringify(action.payload.user));
-        localStorage.setItem('auth_token', action.payload.token);
+      if (typeof window !== "undefined") {
+        localStorage.setItem("auth_user", JSON.stringify(action.payload.user));
+        localStorage.setItem("auth_token", action.payload.token);
       }
     },
     logoutSuccess: (state) => {
@@ -44,18 +47,18 @@ const authSlice = createSlice({
       state.token = null;
       state.isAuthenticated = false;
       state.isInitialized = true;
-      
+
       // Clear session info from localStorage
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('auth_user');
-        localStorage.removeItem('auth_token');
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("auth_user");
+        localStorage.removeItem("auth_token");
       }
     },
     initializeAuth: (state) => {
-      if (typeof window !== 'undefined') {
-        const userJson = localStorage.getItem('auth_user');
-        const token = localStorage.getItem('auth_token');
-        
+      if (typeof window !== "undefined") {
+        const userJson = localStorage.getItem("auth_user");
+        const token = localStorage.getItem("auth_token");
+
         if (userJson && token) {
           try {
             state.user = JSON.parse(userJson);
@@ -63,8 +66,8 @@ const authSlice = createSlice({
             state.isAuthenticated = true;
           } catch (e) {
             // Invalid data in localStorage, clean it up
-            localStorage.removeItem('auth_user');
-            localStorage.removeItem('auth_token');
+            localStorage.removeItem("auth_user");
+            localStorage.removeItem("auth_token");
           }
         }
       }
@@ -73,5 +76,6 @@ const authSlice = createSlice({
   },
 });
 
-export const { loginSuccess, logoutSuccess, initializeAuth } = authSlice.actions;
+export const { loginSuccess, logoutSuccess, initializeAuth } =
+  authSlice.actions;
 export default authSlice.reducer;

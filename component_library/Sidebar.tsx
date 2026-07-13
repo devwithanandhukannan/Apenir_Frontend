@@ -107,7 +107,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       text: "Services",
-      path: "/services-console",
+      path: "/admin/services-console",
       icon: <LayersIcon fontSize="small" />,
     },
     {

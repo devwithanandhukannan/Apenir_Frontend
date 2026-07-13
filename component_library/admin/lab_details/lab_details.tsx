@@ -27,11 +27,32 @@ import LabFinanceTab from "./tabs/finance";
 import LabBatchPaymentTab from "./tabs/batch_payment";
 import LabServicesTab from "./tabs/services";
 import { useLabDetails } from "./useLabDetails";
+import PaidIcon from "@mui/icons-material/Paid";
+import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
+import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import toast from "react-hot-toast";
 
 export const LabDetails: React.FC = () => {
-  const { lab, staff, loading, staffLoading, handleBack } = useLabDetails();
+  const {
+    lab,
+    staff,
+    loading,
+    staffLoading,
+    isUpdatingStatus,
+    toggleLabStatus,
+    handleBack,
+  } = useLabDetails();
   const [isDialogOpen, setIsDialogOpen] = React.useState(false);
   const [activeTab, setActiveTab] = React.useState("appointments");
+
+  const handleToggleStatus = async () => {
+    const res = await toggleLabStatus();
+    if (res.success) {
+      toast.success(res.message);
+    } else {
+      toast.error(res.message);
+    }
+  };
 
   if (loading) {
     return (
@@ -122,23 +143,43 @@ export const LabDetails: React.FC = () => {
           </Box>
         </Box>
 
-        <Chip
-          label={statusLabel}
-          variant="outlined"
-          sx={{
-            fontWeight: 800,
-            fontSize: "13px",
-            borderRadius: "8px",
-            px: 1,
-            color: isActive ? "#10b981" : "#64748b",
-            borderColor: isActive
-              ? "rgba(16, 185, 129, 0.3)"
-              : "rgba(100, 116, 139, 0.3)",
-            bgcolor: isActive
-              ? "rgba(16, 185, 129, 0.05)"
-              : "rgba(100, 116, 139, 0.05)",
-          }}
-        />
+        <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+          <Chip
+            label={statusLabel}
+            variant="outlined"
+            sx={{
+              fontWeight: 800,
+              fontSize: "13px",
+              borderRadius: "8px",
+              px: 1,
+              color: isActive ? "#10b981" : "#ef4444",
+              borderColor: isActive
+                ? "rgba(16, 185, 129, 0.3)"
+                : "rgba(239, 68, 68, 0.3)",
+              bgcolor: isActive
+                ? "rgba(16, 185, 129, 0.05)"
+                : "rgba(239, 68, 68, 0.05)",
+            }}
+          />
+          <Button
+            variant="contained"
+            color={isActive ? "error" : "success"}
+            disabled={isUpdatingStatus}
+            onClick={handleToggleStatus}
+            sx={{
+              textTransform: "none",
+              fontWeight: 700,
+              borderRadius: "8px",
+              px: 2,
+            }}
+          >
+            {isUpdatingStatus
+              ? "Updating..."
+              : isActive
+                ? "Deactivate Account"
+                : "Activate Account"}
+          </Button>
+        </Box>
       </Box>
 
       {/* Grid container for sections */}
@@ -180,9 +221,9 @@ export const LabDetails: React.FC = () => {
                     </Typography>
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: 800, color: "#0f172a" }}
+                      sx={{ fontWeight: 800, color: "text.primary" }}
                     >
-                      Branch Operator
+                      {lab.contactPerson?.name || "Branch Operator"}
                     </Typography>
                   </Box>
                 </Box>
@@ -209,10 +250,10 @@ export const LabDetails: React.FC = () => {
                     </Typography>
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: 800, color: "#0f172a" }}
+                      sx={{ fontWeight: 800, color: "text.primary" }}
                     >
-                      {lab.name.toLowerCase().replace(/\s+/g, "")}
-                      @appenir-lab.com
+                      {lab.contactPerson?.email ||
+                        `${lab.name.toLowerCase().replace(/\s+/g, "")}@appenir-lab.com`}
                     </Typography>
                   </Box>
                 </Box>
@@ -239,7 +280,7 @@ export const LabDetails: React.FC = () => {
                     </Typography>
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: 800, color: "#0f172a" }}
+                      sx={{ fontWeight: 800, color: "text.primary" }}
                     >
                       {lab.phone || "N/A"}
                     </Typography>
@@ -268,7 +309,7 @@ export const LabDetails: React.FC = () => {
                     </Typography>
                     <Typography
                       variant="body2"
-                      sx={{ fontWeight: 800, color: "#0f172a" }}
+                      sx={{ fontWeight: 800, color: "text.primary" }}
                     >
                       {lab.city}, {lab.district}{" "}
                       {lab.pincode ? `- ${lab.pincode}` : ""}
@@ -378,7 +419,7 @@ export const LabDetails: React.FC = () => {
                       <Box>
                         <Typography
                           variant="subtitle2"
-                          sx={{ fontWeight: 800, color: "#0f172a" }}
+                          sx={{ fontWeight: 800, color: "text.primary" }}
                         >
                           {member.name}
                         </Typography>
@@ -466,6 +507,102 @@ export const LabDetails: React.FC = () => {
         </Grid>
       </Grid>
 
+      {/* Lab Stats Section */}
+      <Box sx={{ mt: 5, borderTop: "1px solid #e2e8f0", pt: 4 }}>
+        <Typography variant="h6" sx={{ fontWeight: 800, mb: 3 }}>
+          Laboratory Performance & Statistics
+        </Typography>
+        <Grid container spacing={3}>
+          {[
+            {
+              title: "TOTAL REVENUE",
+              value: `₹${(lab.stats?.totalRevenue ?? 0).toLocaleString("en-IN")}`,
+              color: "#10b981",
+              bg: "rgba(16, 185, 129, 0.08)",
+              icon: <PaidIcon />,
+            },
+            {
+              title: "LAB PAYOUT",
+              value: `₹${(lab.stats?.totalLabPayout ?? 0).toLocaleString("en-IN")}`,
+              color: "#059669",
+              bg: "rgba(5, 150, 105, 0.08)",
+              icon: <PaidIcon />,
+            },
+            {
+              title: "APPOINTMENTS",
+              value: `${lab.stats?.totalAppointments ?? 0} total (${lab.stats?.completedAppointments ?? 0} done)`,
+              color: "#6b21a8",
+              bg: "#f3e8ff",
+              icon: <CalendarTodayIcon />,
+            },
+            {
+              title: "ACTIVE SLOTS",
+              value: `${lab.stats?.activeSlotsCount ?? 0} slots`,
+              color: "#c2410c",
+              bg: "#ffedd5",
+              icon: <AccessTimeIcon />,
+            },
+            {
+              title: "SERVICES OFFERED",
+              value: `${lab.stats?.totalServicesCount ?? 0} tests`,
+              color: "#0891b2",
+              bg: "#ecfeff",
+              icon: <ScienceIcon />,
+            },
+          ].map((stat) => (
+            <Grid key={stat.title} size={{ xs: 12, sm: 6, md: 2.4 }}>
+              <Card
+                sx={{
+                  border: "1px solid var(--color-divider)",
+                  boxShadow: "none",
+                }}
+              >
+                <CardContent
+                  sx={{
+                    p: 2.5,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 1,
+                  }}
+                >
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, color: "text.secondary" }}
+                    >
+                      {stat.title}
+                    </Typography>
+                    <Avatar
+                      variant="rounded"
+                      sx={{
+                        bgcolor: stat.bg,
+                        color: stat.color,
+                        width: 30,
+                        height: 30,
+                      }}
+                    >
+                      {stat.icon}
+                    </Avatar>
+                  </Box>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{ fontWeight: 800, color: "text.primary" }}
+                  >
+                    {stat.value}
+                  </Typography>
+                </CardContent>
+              </Card>
+            </Grid>
+          ))}
+        </Grid>
+      </Box>
+
       {/* 4. Tabs Section */}
       <Box sx={{ mt: 5, borderTop: "1px solid #e2e8f0", pt: 4 }}>
         <Tabs
@@ -550,7 +687,7 @@ export const LabDetails: React.FC = () => {
                   <Box>
                     <Typography
                       variant="subtitle2"
-                      sx={{ fontWeight: 800, color: "#0f172a" }}
+                      sx={{ fontWeight: 800, color: "text.primary" }}
                     >
                       {member.name}
                     </Typography>

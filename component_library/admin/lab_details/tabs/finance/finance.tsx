@@ -34,7 +34,7 @@ export const LabFinanceTab: React.FC<LabFinanceTabProps> = ({ labId }) => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {value}
           </Typography>
@@ -48,7 +48,7 @@ export const LabFinanceTab: React.FC<LabFinanceTabProps> = ({ labId }) => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 700, color: "#0f172a" }}
+            sx={{ fontWeight: 700, color: "text.primary" }}
           >
             {value}
           </Typography>
@@ -81,7 +81,7 @@ export const LabFinanceTab: React.FC<LabFinanceTabProps> = ({ labId }) => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 700, color: "#0f172a" }}
+            sx={{ fontWeight: 700, color: "text.primary" }}
           >
             {value || "UPI"}
           </Typography>
@@ -123,7 +123,7 @@ export const LabFinanceTab: React.FC<LabFinanceTabProps> = ({ labId }) => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             ₹{(value || 0).toLocaleString()}
           </Typography>

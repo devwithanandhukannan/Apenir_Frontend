@@ -42,7 +42,11 @@ export const Services: React.FC = () => {
             <Box sx={{ display: "flex", flexDirection: "column" }}>
               <Typography
                 variant="body2"
-                sx={{ fontWeight: 800, color: "#0f172a", lineHeight: 1.25 }}
+                sx={{
+                  fontWeight: 800,
+                  color: "text.primary",
+                  lineHeight: 1.25,
+                }}
               >
                 {row.name}
               </Typography>
@@ -99,7 +103,7 @@ export const Services: React.FC = () => {
             <Box sx={{ display: "flex", flexDirection: "column" }}>
               <Typography
                 variant="body2"
-                sx={{ fontWeight: 800, color: "#0f172a" }}
+                sx={{ fontWeight: 800, color: "text.primary" }}
               >
                 Price: ₹{hasCustom ? row.customPrice : row.basePrice}
               </Typography>

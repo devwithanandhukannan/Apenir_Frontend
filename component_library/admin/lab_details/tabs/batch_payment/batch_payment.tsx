@@ -76,7 +76,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {value}
           </Typography>
@@ -137,7 +137,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             ₹{value.toLocaleString()}
           </Typography>
@@ -540,7 +540,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
                             >
                               <Typography
                                 variant="subtitle2"
-                                sx={{ fontWeight: 800, color: "#0f172a" }}
+                                sx={{ fontWeight: 800, color: "text.primary" }}
                               >
                                 {item.appointmentNumber} ({item.customerName})
                               </Typography>
@@ -791,7 +791,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
                     </Typography>
                     <Typography
                       variant="subtitle1"
-                      sx={{ fontWeight: 800, color: "#0f172a" }}
+                      sx={{ fontWeight: 800, color: "text.primary" }}
                     >
                       ₹{selectedBatchDetail.totalGrossAmount.toLocaleString()}
                     </Typography>

@@ -122,7 +122,7 @@ export const LabServicesTab: React.FC<LabServicesTabProps> = ({ labId }) => {
                               variant="subtitle2"
                               sx={{
                                 fontWeight: 800,
-                                color: "#0f172a",
+                                color: "text.primary",
                                 lineHeight: 1.3,
                               }}
                             >
@@ -269,7 +269,7 @@ export const LabServicesTab: React.FC<LabServicesTabProps> = ({ labId }) => {
                                 variant="subtitle2"
                                 sx={{
                                   fontWeight: 800,
-                                  color: "#0f172a",
+                                  color: "text.primary",
                                   lineHeight: 1.3,
                                 }}
                               >

@@ -186,7 +186,7 @@ export const useCustomerConsole = () => {
           return (
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               {idLabel}
             </Typography>
@@ -205,7 +205,7 @@ export const useCustomerConsole = () => {
             </Avatar>
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               {row.name || "—"}
             </Typography>
@@ -220,7 +220,7 @@ export const useCustomerConsole = () => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 600, color: "#0f172a" }}
+            sx={{ fontWeight: 600, color: "text.primary" }}
           >
             {value || "—"}
           </Typography>
@@ -234,7 +234,7 @@ export const useCustomerConsole = () => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {value || "—"}
           </Typography>

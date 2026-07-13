@@ -8,3 +8,5 @@ export { default as StaffConsole } from "./staff_console";
 export * from "./staff_console";
 export { default as CustomerConsole } from "./customer_console";
 export * from "./customer_console";
+export { default as ServicesConsole } from "./services_console";
+export * from "./services_console";

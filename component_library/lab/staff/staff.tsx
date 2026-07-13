@@ -112,7 +112,7 @@ export const Staff: React.FC = () => {
           return (
             <Typography
               variant="body2"
-              sx={{ fontWeight: 800, color: "#0f172a" }}
+              sx={{ fontWeight: 800, color: "text.primary" }}
             >
               {idLabel}
             </Typography>
@@ -148,7 +148,7 @@ export const Staff: React.FC = () => {
               </Avatar>
               <Typography
                 variant="body2"
-                sx={{ fontWeight: 800, color: "#0f172a" }}
+                sx={{ fontWeight: 800, color: "text.primary" }}
               >
                 {row.name || "—"}
               </Typography>
@@ -164,7 +164,7 @@ export const Staff: React.FC = () => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 600, color: "#0f172a" }}
+            sx={{ fontWeight: 600, color: "text.primary" }}
           >
             {value || "—"}
           </Typography>
@@ -178,7 +178,7 @@ export const Staff: React.FC = () => {
         Cell: ({ value }) => (
           <Typography
             variant="body2"
-            sx={{ fontWeight: 800, color: "#0f172a" }}
+            sx={{ fontWeight: 800, color: "text.primary" }}
           >
             {value || "—"}
           </Typography>
@@ -703,7 +703,7 @@ export const Staff: React.FC = () => {
               label={
                 <Typography
                   variant="body2"
-                  sx={{ fontWeight: 700, color: "#0f172a" }}
+                  sx={{ fontWeight: 700, color: "text.primary" }}
                 >
                   Staff Account Active
                 </Typography>

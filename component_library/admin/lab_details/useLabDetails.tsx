@@ -2,46 +2,34 @@ import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/router";
 import {
   useLabService,
-  LabItem,
+  LabDetailsResponseData,
   StaffItem,
 } from "@/core_components/apis/admin/labService";
 
 export const useLabDetails = () => {
   const router = useRouter();
   const { id } = router.query;
-  const { getLabs, getLabStaff } = useLabService();
+  const { getLabDetails, updateLabStatus } = useLabService();
 
   const [loading, setLoading] = useState(true);
-  const [lab, setLab] = useState<LabItem | null>(null);
+  const [lab, setLab] = useState<LabDetailsResponseData | null>(null);
   const [staff, setStaff] = useState<StaffItem[]>([]);
   const [staffLoading, setStaffLoading] = useState(false);
+  const [isUpdatingStatus, setIsUpdatingStatus] = useState(false);
 
   const fetchDetails = useCallback(async () => {
-    if (!id) return;
+    if (!id || typeof id !== "string") return;
     setLoading(true);
 
-    // 1. Fetch lab details by matching from list
-    const labsResponse = await getLabs();
-    if (labsResponse.success && labsResponse.data?.data) {
-      const foundLab = labsResponse.data.data.find((l) => l.id === id);
-      if (foundLab) {
-        setLab(foundLab);
-
-        // 2. Fetch staff associated with the lab
-        setStaffLoading(true);
-        const staffResponse = await getLabStaff(foundLab.id, {
-          pageNumber: 1,
-          rowsPerPage: 50,
-        });
-        if (staffResponse.success && staffResponse.data?.data?.items) {
-          setStaff(staffResponse.data.data.items);
-        }
-        setStaffLoading(false);
-      }
+    const response = await getLabDetails(id);
+    if (response.success && response.data?.data) {
+      const data = response.data.data;
+      setLab({ ...data, id });
+      setStaff(data.staff || []);
     }
 
     setLoading(false);
-  }, [id, getLabs, getLabStaff]);
+  }, [id, getLabDetails]);
 
   useEffect(() => {
     if (id) {
@@ -49,12 +37,45 @@ export const useLabDetails = () => {
     }
   }, [id, fetchDetails]);
 
+  const toggleLabStatus = useCallback(async () => {
+    if (!lab || !id || typeof id !== "string")
+      return { success: false, message: "Invalid action." };
+    setIsUpdatingStatus(true);
+    const newActiveState = !lab.isActive;
+    const response = await updateLabStatus(id, newActiveState);
+    setIsUpdatingStatus(false);
+
+    if (response.success) {
+      // Optimistically update status in local state or refetch details
+      setLab((prev) =>
+        prev
+          ? {
+              ...prev,
+              isActive: newActiveState,
+              status: newActiveState ? "Active" : "Inactive",
+            }
+          : null,
+      );
+      return {
+        success: true,
+        message: `Lab branch account successfully ${newActiveState ? "activated" : "deactivated"}.`,
+      };
+    }
+    return {
+      success: false,
+      message: response.data?.message || "Failed to update lab status.",
+    };
+  }, [lab, id, updateLabStatus]);
+
   return {
     lab,
     staff,
     loading,
     staffLoading,
+    isUpdatingStatus,
+    toggleLabStatus,
     handleBack: () => router.push("/admin/lab-console"),
+    refetch: fetchDetails,
   };
 };
 
