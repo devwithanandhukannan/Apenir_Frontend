@@ -4,21 +4,30 @@ import {
   useLab,
   LabServiceItem,
   CurrentLabServicesResponse,
+  UpdateLabServiceRequest,
+  CreateLabCustomServiceRequest,
 } from "@/core_components/apis/admin/lab";
 import {
   GridFilters,
   PaginationProps,
 } from "@/shared_features/responsive_grid/type";
 
-export type { LabServiceItem, CurrentLabServicesResponse };
+export type {
+  LabServiceItem,
+  CurrentLabServicesResponse,
+  UpdateLabServiceRequest,
+  CreateLabCustomServiceRequest,
+};
 
 const SERVICES_KEYS = ["FETCH_SERVICES_REQUEST"] as const;
 
 export const useService = () => {
-  const { getCurrentLabServices } = useLab();
+  const { getCurrentLabServices, updateLabService, createLabCustomService } =
+    useLab();
   const { controllers } = useAbortController(SERVICES_KEYS);
 
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [services, setServices] = useState<LabServiceItem[]>([]);
 
   // Grid Filters
@@ -27,7 +36,7 @@ export const useService = () => {
     sortBy: "name",
     sortDirection: "ASC",
     pageNumber: 1,
-    pageSize: 5,
+    pageSize: 10,
     category: [],
   });
 
@@ -40,7 +49,6 @@ export const useService = () => {
         signal: controllers.FETCH_SERVICES_REQUEST.signal,
       });
 
-      // Ignore aborted calls and keep loading state for the next request
       if (
         response.error &&
         (response.error.name === "CanceledError" ||
@@ -69,6 +77,34 @@ export const useService = () => {
     fetchServices();
   }, [fetchServices]);
 
+  // Toggle a service's active status or update its custom price
+  const handleUpdateService = useCallback(
+    async (serviceId: string, payload: UpdateLabServiceRequest) => {
+      setSaving(true);
+      const response = await updateLabService(serviceId, payload);
+      setSaving(false);
+      if (response.success) {
+        await fetchServices();
+      }
+      return response;
+    },
+    [updateLabService, fetchServices],
+  );
+
+  // Create a new custom service for this branch
+  const handleCreateCustomService = useCallback(
+    async (payload: CreateLabCustomServiceRequest) => {
+      setSaving(true);
+      const response = await createLabCustomService(payload);
+      setSaving(false);
+      if (response.success) {
+        await fetchServices();
+      }
+      return response;
+    },
+    [createLabCustomService, fetchServices],
+  );
+
   // Extract unique categories for filter options
   const categoryOptions = useMemo(() => {
     const categories = Array.from(
@@ -81,7 +117,6 @@ export const useService = () => {
   const filteredData = useMemo(() => {
     return services
       .filter((srv) => {
-        // 1. Search Query Match
         if (filters.search) {
           const query = filters.search.toLowerCase();
           const matches =
@@ -91,7 +126,6 @@ export const useService = () => {
           if (!matches) return false;
         }
 
-        // 2. Category Match (array filter)
         if (filters.category && filters.category.length > 0) {
           if (!filters.category.includes(srv.category)) return false;
         }
@@ -101,10 +135,8 @@ export const useService = () => {
       .sort((a, b) => {
         const field = (filters.sortBy || "name") as keyof LabServiceItem;
         const dir = filters.sortDirection === "DESC" ? -1 : 1;
-
         const valA: any = a[field];
         const valB: any = b[field];
-
         if (typeof valA === "string" && typeof valB === "string") {
           return valA.localeCompare(valB) * dir;
         }
@@ -115,7 +147,7 @@ export const useService = () => {
       });
   }, [services, filters]);
 
-  // Pagination Configuration
+  // Pagination
   const pagination: PaginationProps = useMemo(() => {
     return {
       pageNumber: filters.pageNumber,
@@ -132,12 +164,16 @@ export const useService = () => {
 
   return {
     loading,
+    saving,
+    services,
     paginatedData,
     pagination,
     filters,
     setFilters,
     categoryOptions,
     fetchServices,
+    handleUpdateService,
+    handleCreateCustomService,
   };
 };
 

@@ -1,134 +1,116 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
+import { useApi } from "@/core_components/hooks/useApi/useApi";
 
-export interface ServiceItem {
-  id: string;
+export interface AdminBranchServiceItem {
+  branchServiceId?: string;
+  serviceId: string;
   name: string;
   category: string;
-  price: number;
-  tatHours: number;
-  isAvailable: boolean;
+  description?: string;
+  basePrice: number;
+  defaultCommissionPct: number;
+  customPrice?: number | null;
+  customCommissionPct?: number | null;
+  isEnrolled: boolean;
+  isActive: boolean;
+  isCustom: boolean;
 }
 
-export interface PackageItem {
-  id: string;
-  name: string;
-  testCount: number;
-  price: number;
-  tatHours: number;
-  isAvailable: boolean;
-  description: string;
-}
-
-export const useServices = (labId: string) => {
+export const useServices = (branchId: string) => {
+  const { get, put } = useApi();
   const [loading, setLoading] = useState(true);
-  const [services, setServices] = useState<ServiceItem[]>([]);
-  const [packages, setPackages] = useState<PackageItem[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [services, setServices] = useState<AdminBranchServiceItem[]>([]);
   const [search, setSearch] = useState("");
 
-  useEffect(() => {
+  const fetchServices = useCallback(async () => {
+    if (!branchId) return;
     setLoading(true);
-    const timer = setTimeout(() => {
-      const mockServices: ServiceItem[] = [
-        {
-          id: "srv-1",
-          name: "Complete Blood Count (CBC)",
-          category: "Blood Test",
-          price: 350,
-          tatHours: 12,
-          isAvailable: true,
-        },
-        {
-          id: "srv-2",
-          name: "Lipid Profile (Cholesterol)",
-          category: "Blood Test",
-          price: 850,
-          tatHours: 24,
-          isAvailable: true,
-        },
-        {
-          id: "srv-3",
-          name: "Thyroid Profile (T3, T4, TSH)",
-          category: "Blood Test",
-          price: 900,
-          tatHours: 24,
-          isAvailable: true,
-        },
-        {
-          id: "srv-4",
-          name: "Electrocardiogram (ECG)",
-          category: "Cardiology",
-          price: 600,
-          tatHours: 4,
-          isAvailable: true,
-        },
-        {
-          id: "srv-5",
-          name: "Chest X-Ray",
-          category: "Imaging",
-          price: 1200,
-          tatHours: 6,
-          isAvailable: false,
-        },
-      ];
-
-      const mockPackages: PackageItem[] = [
-        {
-          id: "pkg-1",
-          name: "Executive Health Checkup",
-          testCount: 64,
-          price: 4999,
-          tatHours: 36,
-          isAvailable: true,
-          description:
-            "Comprehensive evaluation of body systems including cardiac, liver, thyroid, kidney, and diabetic profiles.",
-        },
-        {
-          id: "pkg-2",
-          name: "Active Woman Wellness Pack",
-          testCount: 48,
-          price: 2999,
-          tatHours: 24,
-          isAvailable: true,
-          description:
-            "Focused wellness screen containing CBC, hormone profiles, bone density calcium markers, and iron parameters.",
-        },
-        {
-          id: "pkg-3",
-          name: "Senior Citizen Health Screening",
-          testCount: 52,
-          price: 3499,
-          tatHours: 24,
-          isAvailable: true,
-          description:
-            "Custom screen looking at age-related metrics, geriatric metabolic indexes, and arthritis parameters.",
-        },
-      ];
-
-      setServices(mockServices);
-      setPackages(mockPackages);
+    try {
+      const response = await get<any>({
+        endpoint: `/api/admin/branches/${branchId}/services`,
+        requireAuth: true,
+      });
+      if (response.success && response.data?.data) {
+        setServices(response.data.data);
+      } else {
+        setServices([]);
+      }
+    } catch (e) {
+      console.error("Failed to load branch services:", e);
+      setServices([]);
+    } finally {
       setLoading(false);
-    }, 600);
-    return () => clearTimeout(timer);
-  }, [labId]);
+    }
+  }, [branchId, get]);
+
+  useEffect(() => {
+    fetchServices();
+  }, [fetchServices]);
+
+  /** Update commission % for a specific service on this branch */
+  const updateCommission = useCallback(
+    async (serviceId: string, commissionPct: number) => {
+      setSaving(true);
+      const response = await put<any, any>({
+        endpoint: `/api/admin/branches/${branchId}/services/${serviceId}/commission`,
+        body: { commissionPct },
+        requireAuth: true,
+      });
+      setSaving(false);
+      if (response.success) {
+        await fetchServices();
+      }
+      return response;
+    },
+    [branchId, put, fetchServices],
+  );
+
+  /** Full override: price, commission, active toggle for a service */
+  const overrideService = useCallback(
+    async (
+      serviceId: string,
+      payload: {
+        customPrice?: number | null;
+        customCommissionPct?: number | null;
+        isActive: boolean;
+      },
+    ) => {
+      setSaving(true);
+      const response = await put<any, any>({
+        endpoint: `/api/admin/branches/${branchId}/services/${serviceId}`,
+        body: payload,
+        requireAuth: true,
+      });
+      setSaving(false);
+      if (response.success) {
+        await fetchServices();
+      }
+      return response;
+    },
+    [branchId, put, fetchServices],
+  );
 
   const filteredServices = useMemo(() => {
-    return services.filter((srv) =>
-      srv.name.toLowerCase().includes(search.toLowerCase()),
+    const q = search.toLowerCase();
+    return services.filter(
+      (s) =>
+        !q ||
+        s.name.toLowerCase().includes(q) ||
+        s.category.toLowerCase().includes(q),
     );
   }, [services, search]);
 
-  const filteredPackages = useMemo(() => {
-    return packages.filter((pkg) =>
-      pkg.name.toLowerCase().includes(search.toLowerCase()),
-    );
-  }, [packages, search]);
-
   return {
     services: filteredServices,
-    packages: filteredPackages,
+    allServices: services,
     loading,
+    saving,
     search,
     setSearch,
+    fetchServices,
+    updateCommission,
+    overrideService,
   };
 };
 

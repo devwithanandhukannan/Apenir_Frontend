@@ -99,6 +99,19 @@ export interface CurrentLabServicesResponse {
   errors: string[];
 }
 
+export interface UpdateLabServiceRequest {
+  customPrice?: number | null;
+  isActive: boolean;
+}
+
+export interface CreateLabCustomServiceRequest {
+  name: string;
+  category: string;
+  description?: string;
+  basePrice: number;
+  customPrice?: number | null;
+}
+
 // Lab Payment Batch interfaces
 export interface LabPaymentBatchItem {
   id: string;
@@ -532,6 +545,63 @@ export const useLab = () => {
     [post],
   );
 
+  // Update a branch service override (toggle active, set custom price)
+  const updateLabService = useCallback(
+    async (
+      serviceId: string,
+      payload: UpdateLabServiceRequest,
+      options?: Omit<
+        MutationRequestOptions<any, UpdateLabServiceRequest>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await put<any, UpdateLabServiceRequest>({
+        endpoint: `/api/lab/services/${serviceId}`,
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data: any) => {
+          if (options?.onSuccess) options.onSuccess(data);
+        },
+        onError: (err: any) => {
+          if (options?.onError) options.onError(err);
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+      return response;
+    },
+    [put],
+  );
+
+  // Create a new private custom service for this branch
+  const createLabCustomService = useCallback(
+    async (
+      payload: CreateLabCustomServiceRequest,
+      options?: Omit<
+        MutationRequestOptions<any, CreateLabCustomServiceRequest>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, CreateLabCustomServiceRequest>({
+        endpoint: "/api/lab/services",
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data: any) => {
+          if (options?.onSuccess) options.onSuccess(data);
+        },
+        onError: (err: any) => {
+          if (options?.onError) options.onError(err);
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+      return response;
+    },
+    [post],
+  );
+
   return {
     labLogin,
     getCurrentLabStaff,
@@ -541,6 +611,8 @@ export const useLab = () => {
     getCurrentLabAppointments,
     assignStaffToAppointment,
     getCurrentLabServices,
+    updateLabService,
+    createLabCustomService,
     getCurrentLabPaymentBatches,
     getCurrentLabPaymentBatchDetails,
     confirmBatchReceipt,
