@@ -31,7 +31,7 @@ export const GridHeader: React.FC<GridHeaderProps> = ({
                 width: column.width,
                 fontWeight: 700,
                 color: "text.secondary",
-                borderBottom: "1px solid #e2e8f0",
+                borderBottom: "1px solid var(--color-border)",
                 py: 2.2,
               }}
             >

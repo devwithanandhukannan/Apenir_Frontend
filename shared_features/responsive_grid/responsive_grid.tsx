@@ -46,22 +46,9 @@ export const ResponsiveGrid = <T = any,>({
           <HoverActionButton
             size="small"
             variant="contained"
-            color="primary"
             onClick={(e) => {
               e.stopPropagation();
               onRowActionClick(row);
-            }}
-            sx={{
-              textTransform: "none",
-              borderRadius: "6px",
-              fontWeight: 700,
-              fontSize: "11px",
-              py: 0.5,
-              px: 1.5,
-              boxShadow: "none",
-              "&:hover": {
-                boxShadow: "none",
-              },
             }}
           >
             {rowActionLabel || "Open"}

@@ -220,13 +220,13 @@ export const Sidebar: React.FC<SidebarProps> = ({
           >
             <Avatar
               sx={{
-                bgcolor: "primary.main",
+                bgcolor: "secondary.main",
                 width: 28,
                 height: 28,
                 fontSize: "14px",
                 fontWeight: 800,
               }}
-              className="bg-primary"
+              className="bg-secondary"
             >
               A
             </Avatar>
@@ -242,9 +242,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 className="font-extrabold tracking-tight"
               >
                 Appenir
-                <span className="text-secondary">
-                  {isAuthenticated && user?.role === "lab" ? " Lab" : " MS"}
-                </span>
+                <Box component="span" sx={{ color: "secondary.main", ml: 0.5 }}>
+                  {isAuthenticated && user?.role === "lab" ? "Lab" : "MS"}
+                </Box>
               </Typography>
             )}
           </Box>

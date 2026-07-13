@@ -30,8 +30,8 @@ export const GridCell: React.FC<GridCellProps> = ({
       align={column.align || "left"}
       className={column.cellClassName}
       sx={{
-        borderBottom: "1px solid #e2e8f0",
-        py: 2.5,
+        borderBottom: "1px solid var(--color-divider)",
+        py: 1.8,
         color: "text.primary",
         maxWidth: column.width || 200,
       }}
