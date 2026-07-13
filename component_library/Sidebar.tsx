@@ -10,10 +10,8 @@ import ListItemText from "@mui/material/ListItemText";
 import Box from "@mui/material/Box";
 import Divider from "@mui/material/Divider";
 import Typography from "@mui/material/Typography";
-import Button from "@mui/material/Button";
 import Avatar from "@mui/material/Avatar";
 import Tooltip from "@mui/material/Tooltip";
-import IconButton from "@mui/material/IconButton";
 
 // Icon imports
 import DashboardIcon from "@mui/icons-material/Dashboard";
@@ -27,7 +25,6 @@ import DescriptionIcon from "@mui/icons-material/Description";
 import BarChartIcon from "@mui/icons-material/BarChart";
 import SettingsIcon from "@mui/icons-material/Settings";
 import HelpIcon from "@mui/icons-material/Help";
-import AddIcon from "@mui/icons-material/Add";
 import KeyboardDoubleArrowRightIcon from "@mui/icons-material/KeyboardDoubleArrowRight";
 import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrowLeft";
 import EventNoteIcon from "@mui/icons-material/EventNote";
@@ -91,10 +88,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
     return router.pathname.startsWith(path);
   };
 
-  const handleNewSample = () => {
-    alert("Action: Create New Sample modal initiated.");
-  };
-
   // Define admin navigation list according to the screenshot
   const adminMenuItems = [
     {
@@ -124,7 +117,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       text: "Packages",
-      path: "/packages-console",
+      path: "/admin/packages-console",
       icon: <InventoryIcon fontSize="small" />,
     },
     {

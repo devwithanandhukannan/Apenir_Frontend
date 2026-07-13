@@ -12,19 +12,26 @@ import DialogContent from "@mui/material/DialogContent";
 import DialogActions from "@mui/material/DialogActions";
 import MenuItem from "@mui/material/MenuItem";
 import Chip from "@mui/material/Chip";
+import Tab from "@mui/material/Tab";
+import Tabs from "@mui/material/Tabs";
 import InputAdornment from "@mui/material/InputAdornment";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
+import Switch from "@mui/material/Switch";
+import Tooltip from "@mui/material/Tooltip";
+import IconButton from "@mui/material/IconButton";
+import Avatar from "@mui/material/Avatar";
 import AddIcon from "@mui/icons-material/Add";
 import SearchIcon from "@mui/icons-material/Search";
-import LayersIcon from "@mui/icons-material/Layers";
+import EditIcon from "@mui/icons-material/Edit";
 import PaidIcon from "@mui/icons-material/Paid";
 import CommissionIcon from "@mui/icons-material/Percent";
-import toast from "react-hot-toast";
-import { useLabService } from "@/core_components/apis/admin/labService";
+import ScienceIcon from "@mui/icons-material/Science";
+import BusinessIcon from "@mui/icons-material/Business";
+import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
 
-interface ServiceItem {
+interface ServiceAdminDto {
   id: string;
   name: string;
   description: string | null;
@@ -32,20 +39,27 @@ interface ServiceItem {
   basePrice: number;
   platformCommissionPct: number;
   isActive: boolean;
+  createdByBranchId: string | null;
+  createdByBranchName: string | null;
   createdAt: string;
 }
 
 export const ServicesConsole: React.FC = () => {
-  const { addService } = useLabService();
-  const { get } = useApi();
+  const { get, post, put } = useApi();
 
-  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [services, setServices] = useState<ServiceAdminDto[]>([]);
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState(0); // 0 = Platform, 1 = Lab Custom
   const [selectedCategoryFilter, setSelectedCategoryFilter] = useState("All");
 
-  // Add Service Form State
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  // ── Dialogs ──────────────────────────────────────────────────────
+  const [addOpen, setAddOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editTarget, setEditTarget] = useState<ServiceAdminDto | null>(null);
+
+  // ── Add Form ─────────────────────────────────────────────────────
   const [formName, setFormName] = useState("");
   const [formDescription, setFormDescription] = useState("");
   const [formCategory, setFormCategory] = useState("");
@@ -53,17 +67,24 @@ export const ServicesConsole: React.FC = () => {
   const [isCreatingNewCategory, setIsCreatingNewCategory] = useState(false);
   const [formBasePrice, setFormBasePrice] = useState<number | "">("");
   const [formCommission, setFormCommission] = useState<number>(15);
-  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  // Load all master services
+  // ── Edit Form ─────────────────────────────────────────────────────
+  const [editName, setEditName] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editBasePrice, setEditBasePrice] = useState<number | "">("");
+  const [editCommission, setEditCommission] = useState<number>(15);
+  const [editIsActive, setEditIsActive] = useState(true);
+
+  // ── Load ──────────────────────────────────────────────────────────
   const loadServices = useCallback(async () => {
     setLoading(true);
-    const response = await get<any>({
-      endpoint: "/api/services",
+    const res = await get<any>({
+      endpoint: "/api/services/all",
       requireAuth: true,
     });
-    if (response.success && response.data?.data) {
-      setServices(response.data.data);
+    if (res.success && res.data?.data) {
+      setServices(res.data.data);
     }
     setLoading(false);
   }, [get]);
@@ -72,117 +93,172 @@ export const ServicesConsole: React.FC = () => {
     loadServices();
   }, [loadServices]);
 
-  // Extract unique categories for filtering and select options
+  // ── Filtered / grouped ────────────────────────────────────────────
+  const isLabTab = activeTab === 1;
+
   const categories = useMemo(() => {
     const set = new Set<string>();
-    services.forEach((s) => {
-      if (s.category) set.add(s.category);
-    });
-    return Array.from(set);
-  }, [services]);
+    services
+      .filter((s) =>
+        isLabTab ? s.createdByBranchId !== null : s.createdByBranchId === null,
+      )
+      .forEach((s) => {
+        if (s.category) set.add(s.category);
+      });
+    return Array.from(set).sort();
+  }, [services, isLabTab]);
 
-  // Filtered services
   const filteredServices = useMemo(() => {
     return services.filter((s) => {
-      const matchesSearch =
-        s.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (s.description &&
-          s.description.toLowerCase().includes(searchQuery.toLowerCase()));
-
-      const matchesCategory =
-        selectedCategoryFilter === "All" ||
-        s.category === selectedCategoryFilter;
-
-      return matchesSearch && matchesCategory;
+      if (
+        isLabTab ? s.createdByBranchId === null : s.createdByBranchId !== null
+      )
+        return false;
+      const q = searchQuery.toLowerCase();
+      if (
+        q &&
+        !s.name.toLowerCase().includes(q) &&
+        !s.description?.toLowerCase().includes(q)
+      )
+        return false;
+      if (
+        selectedCategoryFilter !== "All" &&
+        s.category !== selectedCategoryFilter
+      )
+        return false;
+      return true;
     });
-  }, [services, searchQuery, selectedCategoryFilter]);
+  }, [services, searchQuery, selectedCategoryFilter, isLabTab]);
 
-  // Group filtered services by category for structured layout
   const groupedServices = useMemo(() => {
-    const groups: Record<string, ServiceItem[]> = {};
+    const groups: Record<string, ServiceAdminDto[]> = {};
     filteredServices.forEach((s) => {
-      if (!groups[s.category]) {
-        groups[s.category] = [];
-      }
+      if (!groups[s.category]) groups[s.category] = [];
       groups[s.category].push(s);
     });
     return groups;
   }, [filteredServices]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // ── Add Service ──────────────────────────────────────────────────
+  const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formName.trim()) {
-      toast.error("Service name is required.");
-      return;
-    }
-
     const finalCategory = isCreatingNewCategory
       ? newCategoryInput.trim()
       : formCategory;
-    if (!finalCategory) {
-      toast.error("Category is required.");
+    if (
+      !formName.trim() ||
+      !finalCategory ||
+      formBasePrice === "" ||
+      formBasePrice < 0
+    ) {
+      toast.error("Name, category, and valid base price are required.");
       return;
     }
-
-    if (formBasePrice === "" || formBasePrice < 0) {
-      toast.error("Base price must be a non-negative number.");
-      return;
-    }
-
-    if (formCommission < 0 || formCommission > 100) {
-      toast.error("Platform commission must be between 0% and 100%.");
-      return;
-    }
-
-    setIsSubmitting(true);
-    const response = await addService({
-      name: formName.trim(),
-      description: formDescription.trim() || undefined,
-      category: finalCategory,
-      basePrice: Number(formBasePrice),
-      platformCommissionPct: Number(formCommission),
+    setSaving(true);
+    const res = await post<any, any>({
+      endpoint: "/api/services",
+      body: {
+        name: formName.trim(),
+        description: formDescription.trim() || null,
+        category: finalCategory,
+        basePrice: Number(formBasePrice),
+        platformCommissionPct: formCommission,
+      },
+      requireAuth: true,
     });
-    setIsSubmitting(false);
-
-    if (response.success) {
-      toast.success("Service added successfully!");
-      setIsAddDialogOpen(false);
-      // Reset form
-      setFormName("");
-      setFormDescription("");
-      setFormCategory("");
-      setNewCategoryInput("");
-      setIsCreatingNewCategory(false);
-      setFormBasePrice("");
-      setFormCommission(15);
-      // Reload services
+    setSaving(false);
+    if (res.success) {
+      toast.success("Service added!");
+      setAddOpen(false);
+      resetAddForm();
       loadServices();
     } else {
-      toast.error(response.data?.message || "Failed to add service.");
+      toast.error(res.data?.message || "Failed to add service.");
     }
   };
 
-  const getCategoryColor = (cat: string) => {
-    const colors: Record<string, string> = {
-      pcr: "#059669",
-      serology: "#10b981",
-      biochemistry: "#6b21a8",
-      hematology: "#b91c1c",
-      microbiology: "#0369a1",
-      pathology: "#c2410c",
-    };
-    return colors[cat.toLowerCase()] || "#475569";
+  const resetAddForm = () => {
+    setFormName("");
+    setFormDescription("");
+    setFormCategory("");
+    setNewCategoryInput("");
+    setIsCreatingNewCategory(false);
+    setFormBasePrice("");
+    setFormCommission(15);
   };
+
+  // ── Edit Service ─────────────────────────────────────────────────
+  const openEdit = (svc: ServiceAdminDto) => {
+    setEditTarget(svc);
+    setEditName(svc.name);
+    setEditDescription(svc.description || "");
+    setEditCategory(svc.category);
+    setEditBasePrice(svc.basePrice);
+    setEditCommission(svc.platformCommissionPct);
+    setEditIsActive(svc.isActive);
+    setEditOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editTarget) return;
+    setSaving(true);
+    const res = await put<any, any>({
+      endpoint: `/api/admin/services/${editTarget.id}`,
+      body: {
+        name: editName.trim() || null,
+        description: editDescription.trim() || null,
+        category: editCategory.trim() || null,
+        basePrice: editBasePrice !== "" ? Number(editBasePrice) : null,
+        platformCommissionPct: editCommission,
+        isActive: editIsActive,
+      },
+      requireAuth: true,
+    });
+    setSaving(false);
+    if (res.success) {
+      toast.success("Service updated!");
+      setEditOpen(false);
+      loadServices();
+    } else {
+      toast.error(res.data?.message || "Failed to update service.");
+    }
+  };
+
+  // ── Quick active toggle ──────────────────────────────────────────
+  const handleToggleActive = async (svc: ServiceAdminDto) => {
+    const res = await put<any, any>({
+      endpoint: `/api/admin/services/${svc.id}`,
+      body: { isActive: !svc.isActive },
+      requireAuth: true,
+    });
+    if (res.success) {
+      toast.success(
+        svc.isActive ? "Service hidden from labs." : "Service visible to labs.",
+      );
+      loadServices();
+    } else {
+      toast.error("Failed to update.");
+    }
+  };
+
+  const platformCount = services.filter(
+    (s) => s.createdByBranchId === null,
+  ).length;
+  const labCustomCount = services.filter(
+    (s) => s.createdByBranchId !== null,
+  ).length;
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 } }}>
-      {/* Upper header section */}
+      <Toaster position="top-right" />
+
+      {/* Header */}
       <Box
         sx={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "center",
-          mb: 4,
+          alignItems: "flex-start",
+          mb: 3,
           flexWrap: "wrap",
           gap: 2,
         }}
@@ -195,30 +271,51 @@ export const ServicesConsole: React.FC = () => {
             Services Catalog
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            Manage global diagnostic tests, default pricing thresholds, and
-            master categories.
+            Manage platform diagnostic tests and view lab-created custom
+            services.
           </Typography>
         </Box>
-
         <Button
           variant="contained"
+          color="secondary"
           startIcon={<AddIcon />}
-          onClick={() => setIsAddDialogOpen(true)}
+          onClick={() => setAddOpen(true)}
           sx={{
             textTransform: "none",
             fontWeight: 700,
             borderRadius: "8px",
-            px: 2.5,
-            py: 1.2,
             boxShadow: "none",
+            color: "#fff",
             "&:hover": { boxShadow: "none" },
           }}
         >
-          Add Service
+          Add Platform Service
         </Button>
       </Box>
 
-      {/* Filters Bar */}
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => {
+          setActiveTab(v);
+          setSelectedCategoryFilter("All");
+          setSearchQuery("");
+        }}
+        sx={{
+          mb: 3,
+          borderBottom: "1px solid var(--color-border)",
+          ".MuiTab-root": {
+            fontWeight: 700,
+            textTransform: "none",
+            fontSize: "14px",
+          },
+        }}
+      >
+        <Tab label={`Platform Services (${platformCount})`} />
+        <Tab label={`Lab Custom Services (${labCustomCount})`} />
+      </Tabs>
+
+      {/* Filters */}
       <Box
         sx={{
           display: "flex",
@@ -228,7 +325,7 @@ export const ServicesConsole: React.FC = () => {
         }}
       >
         <TextField
-          placeholder="Search test name or description..."
+          placeholder="Search name or description..."
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
           size="small"
@@ -246,10 +343,9 @@ export const ServicesConsole: React.FC = () => {
           }}
           sx={{ maxWidth: { sm: 400 } }}
         />
-
         <TextField
           select
-          label="Filter by Category"
+          label="Category"
           value={selectedCategoryFilter}
           onChange={(e) => setSelectedCategoryFilter(e.target.value)}
           size="small"
@@ -264,36 +360,27 @@ export const ServicesConsole: React.FC = () => {
         </TextField>
       </Box>
 
+      {/* Content */}
       {loading ? (
         <Box sx={{ display: "flex", justifyContent: "center", py: 8 }}>
-          <CircularProgress />
+          <CircularProgress color="secondary" />
         </Box>
-      ) : services.length === 0 ? (
-        <Card
-          sx={{
-            p: 4,
-            textAlign: "center",
-            border: "1px dashed var(--color-border)",
-            boxShadow: "none",
-          }}
-        >
-          <Typography color="text.secondary" variant="body1">
-            No diagnostic services registered. Click "Add Service" to start.
-          </Typography>
-        </Card>
       ) : Object.keys(groupedServices).length === 0 ? (
-        <Card
+        <Box
           sx={{
-            p: 4,
             textAlign: "center",
+            py: 8,
             border: "1px dashed var(--color-border)",
-            boxShadow: "none",
+            borderRadius: "12px",
           }}
         >
+          <ScienceIcon sx={{ fontSize: 48, color: "text.disabled", mb: 1 }} />
           <Typography color="text.secondary" variant="body1">
-            No services match the search or category filters.
+            {activeTab === 0
+              ? 'No platform services yet. Click "Add Platform Service" to start.'
+              : "No lab-created custom services found."}
           </Typography>
-        </Card>
+        </Box>
       ) : (
         <Box sx={{ display: "flex", flexDirection: "column", gap: 5 }}>
           {Object.entries(groupedServices).map(([category, items]) => (
@@ -301,10 +388,7 @@ export const ServicesConsole: React.FC = () => {
               <Box
                 sx={{ display: "flex", alignItems: "center", gap: 1.5, mb: 2 }}
               >
-                <Typography
-                  variant="h6"
-                  sx={{ fontWeight: 800, color: "#0f172a" }}
-                >
+                <Typography variant="h6" sx={{ fontWeight: 800 }}>
                   {category}
                 </Typography>
                 <Chip
@@ -319,23 +403,43 @@ export const ServicesConsole: React.FC = () => {
                 />
               </Box>
               <Grid container spacing={3}>
-                {items.map((item) => (
-                  <Grid key={item.id} size={{ xs: 12, sm: 6, md: 4 }}>
+                {items.map((svc) => (
+                  <Grid key={svc.id} size={{ xs: 12, sm: 6, md: 4 }}>
                     <Card
                       sx={{
                         border: "1px solid var(--color-divider)",
                         boxShadow: "none",
+                        opacity: svc.isActive ? 1 : 0.55,
+                        transition: "opacity 0.2s",
+                        position: "relative",
                       }}
                     >
+                      {/* Inactive overlay tag */}
+                      {!svc.isActive && (
+                        <Box sx={{ position: "absolute", top: 10, right: 10 }}>
+                          <Chip
+                            label="HIDDEN"
+                            size="small"
+                            sx={{
+                              fontWeight: 800,
+                              fontSize: "9px",
+                              color: "#dc2626",
+                              bgcolor: "rgba(220,38,38,0.08)",
+                              height: 18,
+                              borderRadius: "4px",
+                            }}
+                          />
+                        </Box>
+                      )}
                       <CardContent
                         sx={{
                           p: 3,
                           display: "flex",
                           flexDirection: "column",
-                          height: "100%",
                           gap: 2,
                         }}
                       >
+                        {/* Name + category + lab badge */}
                         <Box
                           sx={{
                             display: "flex",
@@ -344,26 +448,49 @@ export const ServicesConsole: React.FC = () => {
                             gap: 1,
                           }}
                         >
-                          <Typography
-                            variant="subtitle1"
-                            sx={{
-                              fontWeight: 800,
-                              color: "#0f172a",
-                              lineHeight: 1.3,
-                            }}
-                          >
-                            {item.name}
-                          </Typography>
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography
+                              variant="subtitle1"
+                              sx={{
+                                fontWeight: 800,
+                                lineHeight: 1.3,
+                                color: "text.primary",
+                              }}
+                            >
+                              {svc.name}
+                            </Typography>
+                            {svc.createdByBranchName && (
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 0.5,
+                                  mt: 0.4,
+                                }}
+                              >
+                                <BusinessIcon
+                                  sx={{ fontSize: 12, color: "#f59e0b" }}
+                                />
+                                <Typography
+                                  variant="caption"
+                                  sx={{ color: "#f59e0b", fontWeight: 700 }}
+                                >
+                                  {svc.createdByBranchName}
+                                </Typography>
+                              </Box>
+                            )}
+                          </Box>
                           <Chip
-                            label={item.category}
+                            label={svc.category}
                             size="small"
                             variant="outlined"
                             sx={{
                               fontWeight: 700,
                               fontSize: "10px",
-                              borderColor: getCategoryColor(item.category),
-                              color: getCategoryColor(item.category),
                               borderRadius: "4px",
+                              flexShrink: 0,
+                              color: "#475569",
+                              borderColor: "#cbd5e1",
                             }}
                           />
                         </Box>
@@ -371,18 +498,25 @@ export const ServicesConsole: React.FC = () => {
                         <Typography
                           variant="body2"
                           color="text.secondary"
-                          sx={{ flexGrow: 1, minHeight: "40px" }}
+                          sx={{
+                            flexGrow: 1,
+                            minHeight: "36px",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                            overflow: "hidden",
+                          }}
                         >
-                          {item.description || "No description provided."}
+                          {svc.description || "No description provided."}
                         </Typography>
 
                         <Divider />
 
+                        {/* Price + Commission */}
                         <Box
                           sx={{
                             display: "flex",
                             justifyContent: "space-between",
-                            mt: 1,
                           }}
                         >
                           <Box>
@@ -398,7 +532,7 @@ export const ServicesConsole: React.FC = () => {
                                 display: "flex",
                                 alignItems: "center",
                                 gap: 0.5,
-                                color: "#10b981",
+                                color: "secondary.main",
                                 mt: 0.2,
                               }}
                             >
@@ -407,11 +541,10 @@ export const ServicesConsole: React.FC = () => {
                                 variant="subtitle2"
                                 sx={{ fontWeight: 800 }}
                               >
-                                ₹{item.basePrice}
+                                ₹{svc.basePrice}
                               </Typography>
                             </Box>
                           </Box>
-
                           <Box>
                             <Typography
                               variant="caption"
@@ -434,10 +567,58 @@ export const ServicesConsole: React.FC = () => {
                                 variant="subtitle2"
                                 sx={{ fontWeight: 800 }}
                               >
-                                {item.platformCommissionPct}%
+                                {svc.platformCommissionPct}%
                               </Typography>
                             </Box>
                           </Box>
+                        </Box>
+
+                        {/* Actions row */}
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            pt: 0.5,
+                          }}
+                        >
+                          <Box
+                            sx={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: 0.5,
+                            }}
+                          >
+                            <Switch
+                              size="small"
+                              checked={svc.isActive}
+                              onChange={() => handleToggleActive(svc)}
+                              color="secondary"
+                            />
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontWeight: 600,
+                                color: svc.isActive
+                                  ? "secondary.main"
+                                  : "text.disabled",
+                              }}
+                            >
+                              {svc.isActive ? "Visible" : "Hidden"}
+                            </Typography>
+                          </Box>
+                          <Tooltip title="Edit service">
+                            <IconButton
+                              size="small"
+                              onClick={() => openEdit(svc)}
+                              sx={{
+                                border: "1px solid var(--color-border)",
+                                borderRadius: "8px",
+                              }}
+                            >
+                              <EditIcon fontSize="small" />
+                            </IconButton>
+                          </Tooltip>
                         </Box>
                       </CardContent>
                     </Card>
@@ -449,54 +630,45 @@ export const ServicesConsole: React.FC = () => {
         </Box>
       )}
 
-      {/* Add Service Dialog */}
+      {/* ── Add Service Dialog ─────────────────────────────────── */}
       <Dialog
-        open={isAddDialogOpen}
-        onClose={() => !isSubmitting && setIsAddDialogOpen(false)}
+        open={addOpen}
+        onClose={() => !saving && setAddOpen(false)}
         maxWidth="sm"
         fullWidth
-        slotProps={{
-          paper: {
-            sx: { borderRadius: "16px", p: 1 },
-          },
-        }}
+        slotProps={{ paper: { sx: { borderRadius: "16px", p: 1 } } }}
       >
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleAdd}>
           <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
-            Add Master Diagnostic Service
+            Add Platform Service
           </DialogTitle>
           <DialogContent
             sx={{ py: 1.5, display: "flex", flexDirection: "column", gap: 2.5 }}
           >
             <Typography variant="body2" color="text.secondary">
-              Create a new diagnostic test globally available for all lab branch
-              custom override networks.
+              Create a new diagnostic test globally available for all lab
+              branches.
             </Typography>
-
             <TextField
               label="Service Name"
               placeholder="e.g. Complete Blood Count (CBC)"
               fullWidth
               required
-              disabled={isSubmitting}
+              disabled={saving}
               value={formName}
               onChange={(e) => setFormName(e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
             />
-
             <TextField
               label="Description"
-              placeholder="Brief summary detailing the diagnostic test parameters and turnaround time guidelines."
               fullWidth
               multiline
               rows={3}
-              disabled={isSubmitting}
+              disabled={saving}
               value={formDescription}
               onChange={(e) => setFormDescription(e.target.value)}
               slotProps={{ inputLabel: { shrink: true } }}
             />
-
-            {/* Category Select Block */}
             <Box
               sx={{
                 border: "1px solid var(--color-border)",
@@ -513,7 +685,7 @@ export const ServicesConsole: React.FC = () => {
                 }}
               >
                 <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                  Service Category
+                  Category
                 </Typography>
                 <Button
                   size="small"
@@ -522,19 +694,15 @@ export const ServicesConsole: React.FC = () => {
                   }
                   sx={{ textTransform: "none", fontWeight: 700 }}
                 >
-                  {isCreatingNewCategory
-                    ? "Select Existing"
-                    : "+ Create New Category"}
+                  {isCreatingNewCategory ? "Select Existing" : "+ New Category"}
                 </Button>
               </Box>
-
               {isCreatingNewCategory ? (
                 <TextField
-                  label="New Category Name"
-                  placeholder="e.g. Biochemistry"
+                  label="New Category"
                   fullWidth
                   required
-                  disabled={isSubmitting}
+                  disabled={saving}
                   value={newCategoryInput}
                   onChange={(e) => setNewCategoryInput(e.target.value)}
                   slotProps={{ inputLabel: { shrink: true } }}
@@ -545,15 +713,13 @@ export const ServicesConsole: React.FC = () => {
                   label="Choose Category"
                   fullWidth
                   required
-                  disabled={isSubmitting || categories.length === 0}
+                  disabled={saving || categories.length === 0}
                   value={formCategory}
                   onChange={(e) => setFormCategory(e.target.value)}
                   slotProps={{ inputLabel: { shrink: true } }}
                 >
                   {categories.length === 0 ? (
-                    <MenuItem disabled>
-                      No categories available. Create one.
-                    </MenuItem>
+                    <MenuItem disabled>No categories — create one</MenuItem>
                   ) : (
                     categories.map((cat) => (
                       <MenuItem key={cat} value={cat}>
@@ -564,16 +730,14 @@ export const ServicesConsole: React.FC = () => {
                 </TextField>
               )}
             </Box>
-
             <Grid container spacing={2}>
               <Grid size={{ xs: 6 }}>
                 <TextField
                   label="Base Price (₹)"
-                  placeholder="0"
                   type="number"
                   fullWidth
                   required
-                  disabled={isSubmitting}
+                  disabled={saving}
                   value={formBasePrice}
                   onChange={(e) =>
                     setFormBasePrice(
@@ -592,12 +756,11 @@ export const ServicesConsole: React.FC = () => {
               </Grid>
               <Grid size={{ xs: 6 }}>
                 <TextField
-                  label="Platform Commission (%)"
-                  placeholder="15"
+                  label="Commission (%)"
                   type="number"
                   fullWidth
                   required
-                  disabled={isSubmitting}
+                  disabled={saving}
                   value={formCommission}
                   onChange={(e) => setFormCommission(Number(e.target.value))}
                   slotProps={{
@@ -614,10 +777,13 @@ export const ServicesConsole: React.FC = () => {
           </DialogContent>
           <DialogActions sx={{ px: 3, py: 2 }}>
             <Button
-              onClick={() => setIsAddDialogOpen(false)}
+              onClick={() => {
+                setAddOpen(false);
+                resetAddForm();
+              }}
               variant="outlined"
               color="inherit"
-              disabled={isSubmitting}
+              disabled={saving}
               sx={{
                 fontWeight: 700,
                 textTransform: "none",
@@ -629,20 +795,203 @@ export const ServicesConsole: React.FC = () => {
             <Button
               type="submit"
               variant="contained"
-              disabled={isSubmitting}
+              color="secondary"
+              disabled={saving}
+              startIcon={
+                saving ? <CircularProgress size={16} color="inherit" /> : null
+              }
               sx={{
                 fontWeight: 700,
                 textTransform: "none",
                 borderRadius: "8px",
-                px: 3,
-                boxShadow: "none",
-                "&:hover": { boxShadow: "none" },
+                color: "#fff",
               }}
             >
-              {isSubmitting ? "Adding..." : "Add Service"}
+              {saving ? "Adding..." : "Add Service"}
             </Button>
           </DialogActions>
         </form>
+      </Dialog>
+
+      {/* ── Edit Service Dialog ───────────────────────────────── */}
+      <Dialog
+        open={editOpen}
+        onClose={() => !saving && setEditOpen(false)}
+        maxWidth="sm"
+        fullWidth
+        slotProps={{ paper: { sx: { borderRadius: "16px", p: 1 } } }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 0 }}>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
+            <Avatar
+              sx={{ bgcolor: "rgba(16,185,129,0.1)", width: 34, height: 34 }}
+            >
+              <ScienceIcon sx={{ color: "secondary.main", fontSize: 18 }} />
+            </Avatar>
+            Edit Service
+          </Box>
+          {editTarget?.createdByBranchName && (
+            <Typography
+              variant="caption"
+              sx={{
+                color: "#f59e0b",
+                fontWeight: 700,
+                display: "flex",
+                alignItems: "center",
+                gap: 0.5,
+                mt: 0.5,
+              }}
+            >
+              <BusinessIcon sx={{ fontSize: 12 }} /> Lab:{" "}
+              {editTarget.createdByBranchName}
+            </Typography>
+          )}
+        </DialogTitle>
+        <Divider sx={{ mt: 1.5 }} />
+        <DialogContent
+          sx={{ py: 2.5, display: "flex", flexDirection: "column", gap: 2.5 }}
+        >
+          <TextField
+            label="Service Name"
+            fullWidth
+            required
+            disabled={saving}
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            label="Description"
+            fullWidth
+            multiline
+            rows={3}
+            disabled={saving}
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <TextField
+            label="Category"
+            fullWidth
+            required
+            disabled={saving}
+            value={editCategory}
+            onChange={(e) => setEditCategory(e.target.value)}
+            slotProps={{ inputLabel: { shrink: true } }}
+          />
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="Base Price (₹)"
+                type="number"
+                fullWidth
+                required
+                disabled={saving}
+                value={editBasePrice}
+                onChange={(e) =>
+                  setEditBasePrice(
+                    e.target.value === "" ? "" : Number(e.target.value),
+                  )
+                }
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">₹</InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Grid>
+            <Grid size={{ xs: 6 }}>
+              <TextField
+                label="Commission (%)"
+                type="number"
+                fullWidth
+                required
+                disabled={saving}
+                value={editCommission}
+                onChange={(e) => setEditCommission(Number(e.target.value))}
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  input: {
+                    endAdornment: (
+                      <InputAdornment position="end">%</InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Grid>
+          </Grid>
+          <Box
+            sx={{
+              display: "flex",
+              alignItems: "center",
+              gap: 1.5,
+              p: 1.5,
+              borderRadius: "8px",
+              border: "1px solid var(--color-border)",
+              bgcolor: editIsActive
+                ? "rgba(16,185,129,0.04)"
+                : "rgba(100,116,139,0.04)",
+            }}
+          >
+            <Switch
+              size="small"
+              checked={editIsActive}
+              onChange={(e) => setEditIsActive(e.target.checked)}
+              color="secondary"
+            />
+            <Box>
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {editIsActive
+                  ? "Active — Visible to labs"
+                  : "Inactive — Hidden from all labs"}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Inactive services cannot be enrolled or ordered by any lab.
+              </Typography>
+            </Box>
+          </Box>
+        </DialogContent>
+        <Divider />
+        <DialogActions sx={{ px: 3, py: 2, gap: 1 }}>
+          <Button
+            onClick={() => setEditOpen(false)}
+            variant="outlined"
+            color="inherit"
+            disabled={saving}
+            sx={{
+              fontWeight: 700,
+              textTransform: "none",
+              borderRadius: "8px",
+              borderColor: "var(--color-border)",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            onClick={handleSaveEdit}
+            variant="contained"
+            color="secondary"
+            disabled={saving}
+            startIcon={
+              saving ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                <EditIcon />
+              )
+            }
+            sx={{
+              fontWeight: 700,
+              textTransform: "none",
+              borderRadius: "8px",
+              color: "#fff",
+            }}
+          >
+            {saving ? "Saving..." : "Save Changes"}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

@@ -481,11 +481,6 @@ export const Services: React.FC = () => {
         sortable: false,
         width: 100,
         Cell: ({ row }) => {
-          // isActive comes from branchServiceId existing — we detect custom by checking if row has a branchServiceId with a custom category
-          const isCustom =
-            !row.branchServiceId || row.customCommissionPct !== null;
-          // Actually detect custom: if category is set but no branchServiceId — we just use a flag
-          // The LabServiceItem from API sets branchServiceId = "" for unenrolled admin services
           const isEnrolled = !!row.branchServiceId;
           return (
             <Chip
@@ -525,28 +520,6 @@ export const Services: React.FC = () => {
             saving={saving}
           />
         ),
-      },
-      {
-        accessor: "customCommissionPct",
-        header: "Commission",
-        sortable: true,
-        width: 150,
-        Cell: ({ row }) => {
-          const hasCustomComm =
-            row.customCommissionPct !== null &&
-            row.customCommissionPct !== undefined;
-          return (
-            <Typography
-              variant="body2"
-              sx={{
-                fontWeight: 700,
-                color: hasCustomComm ? "secondary.main" : "text.secondary",
-              }}
-            >
-              {hasCustomComm ? `${row.customCommissionPct}%` : "Default"}
-            </Typography>
-          );
-        },
       },
       {
         accessor: "isActive",
