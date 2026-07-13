@@ -68,6 +68,16 @@ export const Sidebar: React.FC<SidebarProps> = ({
     router.push(path);
   };
 
+  const handleSettingsClick = () => {
+    if (isAuthenticated && user) {
+      if (user.role === "lab") {
+        router.push("/lab/settings");
+      } else {
+        router.push("/admin/settings");
+      }
+    }
+  };
+
   const isActive = (path: string) => {
     if (path === "/admin") {
       return router.pathname === "/admin";
@@ -523,7 +533,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             <Tooltip title="Settings" placement="right">
               <Box>
                 <ListItemButton
-                  onClick={() => alert("MOCK: Settings Panel")}
+                  onClick={handleSettingsClick}
                   sx={{
                     borderRadius: "8px",
                     py: 0.8,
@@ -546,7 +556,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </Tooltip>
           ) : (
             <ListItemButton
-              onClick={() => alert("MOCK: Settings Panel")}
+              onClick={handleSettingsClick}
               sx={{
                 borderRadius: "8px",
                 py: 0.8,

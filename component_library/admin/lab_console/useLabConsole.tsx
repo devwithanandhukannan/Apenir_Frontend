@@ -177,7 +177,7 @@ export const useLabConsole = () => {
         width: 220,
         Cell: ({ value }) => (
           <Box sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-            <Avatar sx={{ bgcolor: "#1d4ed8", width: 28, height: 28 }}>
+            <Avatar sx={{ bgcolor: "secondary.main", width: 28, height: 28 }}>
               <ScienceIcon sx={{ fontSize: "16px", color: "#fff" }} />
             </Avatar>
             <Typography
@@ -190,6 +190,19 @@ export const useLabConsole = () => {
         ),
       },
       {
+        accessor: "labUser",
+        header: "Registered Email",
+        width: 200,
+        Cell: ({ row }) => (
+          <Typography
+            variant="body2"
+            sx={{ fontWeight: 600, color: "text.primary" }}
+          >
+            {row.labUser?.email || "Pending Invite"}
+          </Typography>
+        ),
+      },
+      {
         accessor: "city",
         header: "Location",
         width: 180,
@@ -199,15 +212,46 @@ export const useLabConsole = () => {
               variant="body2"
               sx={{ fontWeight: 800, color: "text.primary", lineHeight: 1.25 }}
             >
-              {row.city}
+              {row.city || "Pending"}
             </Typography>
             <Typography
               variant="caption"
-              sx={{ color: "#64748b", fontWeight: 500, mt: 0.2 }}
+              sx={{ color: "text.secondary", fontWeight: 500, mt: 0.2 }}
             >
-              {row.district}
+              {row.district
+                ? `${row.district} - ${row.pincode || ""}`
+                : "Pending"}
             </Typography>
           </Box>
+        ),
+      },
+      {
+        accessor: "latitude",
+        header: "Coordinates (Lat/Lng)",
+        width: 185,
+        Cell: ({ row }) => (
+          <Typography
+            variant="body2"
+            sx={{ fontWeight: 600, color: "text.secondary", fontSize: "12px" }}
+          >
+            {row.latitude && row.longitude
+              ? `${Number(row.latitude).toFixed(4)}, ${Number(row.longitude).toFixed(4)}`
+              : "Not Configured"}
+          </Typography>
+        ),
+      },
+      {
+        accessor: "serviceRangeKm",
+        header: "Service Range",
+        sortable: true,
+        width: 130,
+        Cell: ({ row }) => (
+          <Typography
+            variant="body2"
+            sx={{ fontWeight: 700, color: "text.primary" }}
+          >
+            {row.serviceRangeKm ? `${row.serviceRangeKm} km` : "10 km"}
+          </Typography>
         ),
       },
       {
@@ -220,7 +264,7 @@ export const useLabConsole = () => {
             variant="body2"
             sx={{ fontWeight: 800, color: "text.primary" }}
           >
-            {value || "N/A"}
+            {value || "Pending"}
           </Typography>
         ),
       },
