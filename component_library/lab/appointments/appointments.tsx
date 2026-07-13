@@ -21,6 +21,7 @@ import BadgeIcon from "@mui/icons-material/Badge";
 import toast from "react-hot-toast";
 import ResponsiveGrid from "@/shared_features/responsive_grid";
 import { useAppointments, LabAppointmentItem } from "./useAppointments";
+import { useApi } from "@/core_components/hooks/useApi/useApi";
 import {
   ColumnConfig,
   FilterMenuConfigItem,
@@ -82,6 +83,59 @@ export const Appointments: React.FC = () => {
   } = useAppointments();
 
   const [showUnassignWarning, setShowUnassignWarning] = React.useState(false);
+
+  const { post } = useApi();
+  const [isReportDialogOpen, setIsReportDialogOpen] = React.useState(false);
+  const [uploadSearchType, setUploadSearchType] = React.useState<
+    "appointment" | "member"
+  >("appointment");
+  const [uploadSearchValue, setUploadSearchValue] = React.useState("");
+  const [selectedReportFile, setSelectedReportFile] =
+    React.useState<File | null>(null);
+  const [uploadingReport, setUploadingReport] = React.useState(false);
+
+  const handleReportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReportFile) {
+      toast.error("Please select a PDF report file.");
+      return;
+    }
+    if (!uploadSearchValue) {
+      toast.error("Please enter the ID/number to verify booking.");
+      return;
+    }
+
+    setUploadingReport(true);
+    const formData = new FormData();
+    if (uploadSearchType === "appointment") {
+      formData.append("appointmentId", uploadSearchValue.trim());
+    } else {
+      formData.append("memberUniqueNumber", uploadSearchValue.trim());
+    }
+    formData.append("file", selectedReportFile);
+
+    const response = await post<any, any>({
+      endpoint: "/api/lab/appointments/upload-report",
+      body: formData,
+      requireAuth: true,
+    });
+    setUploadingReport(false);
+
+    if (response.success && response.data?.success) {
+      toast.success(
+        response.data?.message ||
+          "Report uploaded and sent to WhatsApp successfully.",
+      );
+      setIsReportDialogOpen(false);
+      setUploadSearchValue("");
+      setSelectedReportFile(null);
+      fetchAppointments();
+    } else {
+      toast.error(
+        response.data?.message || "Failed to upload diagnostic report.",
+      );
+    }
+  };
 
   const handleAssignSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -375,27 +429,48 @@ export const Appointments: React.FC = () => {
             details of scheduled appointments.
           </Typography>
         </Box>
-        <Button
-          id="lab-appt-refresh-btn"
-          variant="outlined"
-          color="inherit"
-          startIcon={<RefreshIcon />}
-          onClick={fetchAppointments}
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            borderRadius: "8px",
-            borderColor: "var(--color-border)",
-            color: "text.primary",
-            px: 2,
-            py: 1,
-            "&:hover": {
-              backgroundColor: "rgba(0,0,0,0.02)",
-            },
-          }}
-        >
-          Refresh
-        </Button>
+        <Box sx={{ display: "flex", gap: 1.5 }}>
+          <Button
+            variant="contained"
+            color="secondary"
+            onClick={() => {
+              setIsReportDialogOpen(true);
+              setUploadSearchType("appointment");
+              setUploadSearchValue("");
+              setSelectedReportFile(null);
+            }}
+            sx={{
+              textTransform: "none",
+              fontWeight: 700,
+              borderRadius: "8px",
+              px: 2.5,
+              py: 1,
+            }}
+          >
+            Upload Test Report
+          </Button>
+          <Button
+            id="lab-appt-refresh-btn"
+            variant="outlined"
+            color="inherit"
+            startIcon={<RefreshIcon />}
+            onClick={fetchAppointments}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "8px",
+              borderColor: "var(--color-border)",
+              color: "text.primary",
+              px: 2,
+              py: 1,
+              "&:hover": {
+                backgroundColor: "rgba(0,0,0,0.02)",
+              },
+            }}
+          >
+            Refresh
+          </Button>
+        </Box>
       </Box>
 
       {/* Grid displaying appointments */}
@@ -694,6 +769,132 @@ export const Appointments: React.FC = () => {
             </Button>
           </DialogActions>
         </Box>
+      </Dialog>
+
+      {/* Upload PDF Report Dialog */}
+      <Dialog
+        open={isReportDialogOpen}
+        onClose={() => {
+          if (!uploadingReport) setIsReportDialogOpen(false);
+        }}
+        maxWidth="xs"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: { borderRadius: "16px", p: 1 },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
+          Upload Diagnostic Report PDF
+        </DialogTitle>
+        <DialogContent
+          sx={{ py: 1.5, display: "flex", flexDirection: "column", gap: 2.5 }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            Provide a compiled PDF test report. This will transition the booking
+            status to Completed and dispatch the report instantly via WhatsApp.
+          </Typography>
+
+          <TextField
+            select
+            label="Identify Booking By"
+            fullWidth
+            value={uploadSearchType}
+            onChange={(e) => setUploadSearchType(e.target.value as any)}
+            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+          >
+            <MenuItem value="appointment">Appointment ID / Ref Number</MenuItem>
+            <MenuItem value="member">Member Unique Tube Code</MenuItem>
+          </TextField>
+
+          <TextField
+            label={
+              uploadSearchType === "appointment"
+                ? "Appointment ID or Number"
+                : "Unique Member Code (Tube Barcode)"
+            }
+            fullWidth
+            required
+            value={uploadSearchValue}
+            onChange={(e) => setUploadSearchValue(e.target.value)}
+            sx={{ "& .MuiOutlinedInput-root": { borderRadius: "10px" } }}
+          />
+
+          <Box>
+            <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
+              Select Report PDF File
+            </Typography>
+            <Button
+              variant="outlined"
+              component="label"
+              fullWidth
+              color="inherit"
+              sx={{
+                py: 2,
+                border: "2px dashed var(--color-border)",
+                borderRadius: "10px",
+                textTransform: "none",
+                display: "flex",
+                flexDirection: "column",
+                gap: 0.5,
+              }}
+            >
+              <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                {selectedReportFile
+                  ? selectedReportFile.name
+                  : "Choose PDF File"}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {selectedReportFile
+                  ? `${(selectedReportFile.size / 1024 / 1024).toFixed(2)} MB`
+                  : "File must be a PDF under 10MB"}
+              </Typography>
+              <input
+                type="file"
+                accept="application/pdf"
+                hidden
+                onChange={(e) => {
+                  if (e.target.files && e.target.files.length > 0) {
+                    setSelectedReportFile(e.target.files[0]);
+                  }
+                }}
+              />
+            </Button>
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            onClick={() => setIsReportDialogOpen(false)}
+            variant="outlined"
+            color="inherit"
+            disabled={uploadingReport}
+            sx={{
+              fontWeight: 700,
+              textTransform: "none",
+              borderRadius: "8px",
+            }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            disabled={
+              uploadingReport || !uploadSearchValue || !selectedReportFile
+            }
+            onClick={handleReportSubmit}
+            sx={{
+              fontWeight: 700,
+              textTransform: "none",
+              borderRadius: "8px",
+              px: 3,
+              backgroundColor: "#00897b",
+              "&:hover": { backgroundColor: "#00695c" },
+            }}
+          >
+            {uploadingReport ? "Uploading..." : "Upload & Dispatch"}
+          </Button>
+        </DialogActions>
       </Dialog>
     </Box>
   );

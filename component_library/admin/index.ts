@@ -12,3 +12,5 @@ export { default as ServicesConsole } from "./services_console";
 export * from "./services_console";
 export { default as PackagesConsole } from "./packages_console";
 export * from "./packages_console";
+export { PayrollConsole } from "./payroll_console";
+export * from "./payroll_console";

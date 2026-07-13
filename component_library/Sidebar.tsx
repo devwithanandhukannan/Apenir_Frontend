@@ -122,7 +122,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     },
     {
       text: "Finance",
-      path: "/finance-console",
+      path: "/admin/payroll-console",
       icon: <PaidIcon fontSize="small" />,
     },
     {

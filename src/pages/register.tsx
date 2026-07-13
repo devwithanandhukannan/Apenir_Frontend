@@ -111,7 +111,7 @@ export default function Register() {
     };
 
     verifyToken();
-  }, [router.isReady, token]);
+  }, [router.isReady, token, get]);
 
   const handleAddSlot = () => {
     if (!newStartTime || !newEndTime) {
@@ -138,14 +138,6 @@ export default function Register() {
     e.preventDefault();
     if (!password || password.length < 6) {
       toast.error("Password must be at least 6 characters long.");
-      return;
-    }
-    if (!phone || !city || !district || !pincode) {
-      toast.error("Please fill in all required setup details.");
-      return;
-    }
-    if (slots.length === 0) {
-      toast.error("Please configure at least one available booking slot.");
       return;
     }
 

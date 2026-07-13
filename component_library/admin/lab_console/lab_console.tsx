@@ -30,6 +30,8 @@ export const LabConsole: React.FC = () => {
     setInviteLabName,
     isInviting,
     handleInviteSubmit,
+    emailError,
+    checkingEmail,
   } = useLabConsole();
 
   const onSubmitInvite = async () => {
@@ -139,6 +141,11 @@ export const LabConsole: React.FC = () => {
             required
             value={inviteEmail}
             onChange={(e) => setInviteEmail(e.target.value)}
+            error={!!emailError}
+            helperText={
+              emailError ||
+              (checkingEmail ? "Checking email availability..." : "")
+            }
             slotProps={{
               inputLabel: { shrink: true },
             }}
@@ -157,7 +164,13 @@ export const LabConsole: React.FC = () => {
           <Button
             onClick={onSubmitInvite}
             variant="contained"
-            disabled={isInviting || !inviteEmail || !inviteLabName}
+            disabled={
+              isInviting ||
+              !inviteEmail ||
+              !inviteLabName ||
+              !!emailError ||
+              checkingEmail
+            }
             sx={{
               fontWeight: 700,
               textTransform: "none",

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Container from "@mui/material/Container";
 import Grid from "@mui/material/Grid";
@@ -21,12 +21,16 @@ import Alert from "@mui/material/Alert";
 import DeleteIcon from "@mui/icons-material/Delete";
 import AddIcon from "@mui/icons-material/Add";
 import SaveIcon from "@mui/icons-material/Save";
-import ScienceIcon from "@mui/icons-material/Science";
 import RoomIcon from "@mui/icons-material/Room";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
+import KeyIcon from "@mui/icons-material/Key";
+import Dialog from "@mui/material/Dialog";
+import DialogTitle from "@mui/material/DialogTitle";
+import DialogContent from "@mui/material/DialogContent";
+import DialogActions from "@mui/material/DialogActions";
+import Stack from "@mui/material/Stack";
 import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
-import { useRouter } from "next/router";
 
 // Days mapping: Mon = 1 to Sun = 7
 const DAYS = [
@@ -49,7 +53,6 @@ interface SlotConfig {
 }
 
 export default function LabSettings() {
-  const router = useRouter();
   const { get, put, post, delete: apiDelete } = useApi();
 
   const [loading, setLoading] = useState(true);
@@ -57,7 +60,6 @@ export default function LabSettings() {
   const [slotSaving, setSlotSaving] = useState(false);
 
   // Profile fields state (using strings for inputs to prevent TS type warnings)
-  const [branchId, setBranchId] = useState("");
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [city, setCity] = useState("");
@@ -68,6 +70,19 @@ export default function LabSettings() {
   const [serviceRangeKm, setServiceRangeKm] = useState("10");
   const [email, setEmail] = useState("");
 
+  // Password change state
+  const [oldPassword, setOldPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordSaving, setPasswordSaving] = useState(false);
+
+  // Email change state
+  const [isEmailDialogOpen, setIsEmailDialogOpen] = useState(false);
+  const [newEmail, setNewEmail] = useState("");
+  const [emailToken, setEmailToken] = useState("");
+  const [emailStep, setEmailStep] = useState(1); // 1 = input email, 2 = input code
+  const [emailLoading, setEmailLoading] = useState(false);
+
   // Slots state
   const [slots, setSlots] = useState<SlotConfig[]>([]);
   const [newDay, setNewDay] = useState<number>(1);
@@ -76,7 +91,7 @@ export default function LabSettings() {
   const [newCapacity, setNewCapacity] = useState(5);
 
   // Fetch branch details and slots configuration
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
       // 1. Fetch branch details
@@ -90,7 +105,6 @@ export default function LabSettings() {
         profileRes.data?.data?.branch
       ) {
         const b = profileRes.data.data.branch;
-        setBranchId(b.id);
         setName(b.name || "");
         setPhone(b.phone || "");
         setCity(b.city || "");
@@ -114,16 +128,16 @@ export default function LabSettings() {
       } else {
         toast.error("Failed to load slot configurations.");
       }
-    } catch (err) {
+    } catch {
       toast.error("An error occurred while fetching configuration data.");
     } finally {
       setLoading(false);
     }
-  };
+  }, [get]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +218,90 @@ export default function LabSettings() {
     }
   };
 
+  const handlePasswordChange = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!oldPassword || !newPassword) {
+      toast.error("Please fill in both old and new password fields.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error("New passwords do not match.");
+      return;
+    }
+
+    setPasswordSaving(true);
+    const response = await post<any, any>({
+      endpoint: "/api/lab/change-password",
+      body: {
+        oldPassword,
+        newPassword,
+      },
+      requireAuth: true,
+    });
+    setPasswordSaving(false);
+
+    if (response.success && response.data?.success) {
+      toast.success("Password changed successfully!");
+      setOldPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } else {
+      toast.error(response.data?.message || "Failed to change password.");
+    }
+  };
+
+  const handleEmailRequest = async () => {
+    if (!newEmail || !newEmail.includes("@")) {
+      toast.error("Please enter a valid email address.");
+      return;
+    }
+
+    setEmailLoading(true);
+    const response = await post<any, any>({
+      endpoint: "/api/lab/change-email/request",
+      body: {
+        newEmail: newEmail.trim(),
+      },
+      requireAuth: true,
+    });
+    setEmailLoading(false);
+
+    if (response.success && response.data?.success) {
+      toast.success("Pre-verification code sent to your new email!");
+      setEmailStep(2);
+    } else {
+      toast.error(response.data?.message || "Failed to initiate email change.");
+    }
+  };
+
+  const handleEmailConfirm = async () => {
+    if (!emailToken) {
+      toast.error("Please enter the verification token.");
+      return;
+    }
+
+    setEmailLoading(true);
+    const response = await post<any, any>({
+      endpoint: "/api/lab/change-email/confirm",
+      body: {
+        token: emailToken.trim(),
+      },
+      requireAuth: true,
+    });
+    setEmailLoading(false);
+
+    if (response.success && response.data?.success) {
+      toast.success("Email address updated successfully!");
+      setEmail(newEmail);
+      setIsEmailDialogOpen(false);
+      setNewEmail("");
+      setEmailToken("");
+      setEmailStep(1);
+    } else {
+      toast.error(response.data?.message || "Failed to verify token.");
+    }
+  };
+
   if (loading) {
     return (
       <Box
@@ -278,15 +376,37 @@ export default function LabSettings() {
                       size="small"
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
+                  <Grid
+                    size={{ xs: 12, sm: 6 }}
+                    sx={{ display: "flex", gap: 1, alignItems: "flex-start" }}
+                  >
                     <TextField
                       label="Registered Email"
                       value={email}
                       fullWidth
                       disabled
                       size="small"
-                      helperText="Email cannot be changed"
                     />
+                    <Button
+                      variant="outlined"
+                      color="secondary"
+                      onClick={() => {
+                        setIsEmailDialogOpen(true);
+                        setEmailStep(1);
+                        setNewEmail("");
+                        setEmailToken("");
+                      }}
+                      sx={{
+                        textTransform: "none",
+                        py: 1.0,
+                        px: 2,
+                        height: "40px",
+                        fontWeight: 700,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      Change
+                    </Button>
                   </Grid>
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
@@ -377,6 +497,80 @@ export default function LabSettings() {
                   }}
                 >
                   {profileSaving ? "Saving changes..." : "Save Profile Details"}
+                </Button>
+              </CardContent>
+            </Card>
+          </form>
+
+          <form onSubmit={handlePasswordChange} style={{ marginTop: "24px" }}>
+            <Card
+              sx={{
+                border: "1px solid var(--color-border)",
+                borderRadius: "12px",
+                boxShadow: "none",
+              }}
+            >
+              <CardContent sx={{ p: 4 }}>
+                <Box
+                  sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}
+                >
+                  <KeyIcon color="secondary" />
+                  <Typography variant="subtitle1" sx={{ fontWeight: 800 }}>
+                    Reset Account Password
+                  </Typography>
+                </Box>
+                <Grid container spacing={2.5}>
+                  <Grid size={{ xs: 12 }}>
+                    <TextField
+                      label="Current Password"
+                      type="password"
+                      value={oldPassword}
+                      onChange={(e) => setOldPassword(e.target.value)}
+                      fullWidth
+                      required
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="New Password"
+                      type="password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      fullWidth
+                      required
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 6 }}>
+                    <TextField
+                      label="Confirm New Password"
+                      type="password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      fullWidth
+                      required
+                      size="small"
+                    />
+                  </Grid>
+                </Grid>
+                <Divider sx={{ my: 3 }} />
+                <Button
+                  type="submit"
+                  variant="contained"
+                  color="secondary"
+                  disabled={passwordSaving}
+                  startIcon={<SaveIcon />}
+                  sx={{
+                    textTransform: "none",
+                    fontWeight: 700,
+                    borderRadius: "6px",
+                    py: 1.2,
+                    px: 3,
+                    color: "#fff",
+                  }}
+                >
+                  {passwordSaving ? "Updating Password..." : "Update Password"}
                 </Button>
               </CardContent>
             </Card>
@@ -554,6 +748,85 @@ export default function LabSettings() {
           </Card>
         </Grid>
       </Grid>
+      {/* Change Email Dialog */}
+      <Dialog
+        open={isEmailDialogOpen}
+        onClose={() => setIsEmailDialogOpen(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle sx={{ fontWeight: 900 }}>Change Email Address</DialogTitle>
+        <DialogContent dividers>
+          {emailStep === 1 ? (
+            <Stack spacing={2.5} sx={{ py: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Enter your new email address. We will send a pre-verification
+                token to it to confirm ownership.
+              </Typography>
+              <TextField
+                label="New Email Address"
+                placeholder="newemail@example.com"
+                fullWidth
+                value={newEmail}
+                onChange={(e) => setNewEmail(e.target.value)}
+              />
+            </Stack>
+          ) : (
+            <Stack spacing={2.5} sx={{ py: 1 }}>
+              <Typography variant="body2" color="text.secondary">
+                Enter the pre-verification token sent to{" "}
+                <strong>{newEmail}</strong>.
+              </Typography>
+              <TextField
+                label="Verification Token"
+                placeholder="Enter Token"
+                fullWidth
+                value={emailToken}
+                onChange={(e) => setEmailToken(e.target.value)}
+              />
+            </Stack>
+          )}
+        </DialogContent>
+        <DialogActions sx={{ p: 2 }}>
+          <Button
+            variant="outlined"
+            color="inherit"
+            onClick={() => setIsEmailDialogOpen(false)}
+            sx={{ textTransform: "none", fontWeight: 700 }}
+          >
+            Cancel
+          </Button>
+          {emailStep === 1 ? (
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled={emailLoading || !newEmail}
+              onClick={handleEmailRequest}
+              sx={{ textTransform: "none", fontWeight: 700 }}
+            >
+              {emailLoading ? (
+                <CircularProgress size={20} />
+              ) : (
+                "Request Verification"
+              )}
+            </Button>
+          ) : (
+            <Button
+              variant="contained"
+              color="secondary"
+              disabled={emailLoading || !emailToken}
+              onClick={handleEmailConfirm}
+              sx={{ textTransform: "none", fontWeight: 700 }}
+            >
+              {emailLoading ? (
+                <CircularProgress size={20} />
+              ) : (
+                "Verify & Confirm"
+              )}
+            </Button>
+          )}
+        </DialogActions>
+      </Dialog>
     </Container>
   );
 }

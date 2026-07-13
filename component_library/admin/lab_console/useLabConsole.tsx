@@ -15,6 +15,7 @@ import {
   LabItem,
 } from "@/core_components/apis/admin/labService";
 import { useRouter } from "next/router";
+import { useApi } from "@/core_components/hooks/useApi/useApi";
 
 export const useLabConsole = () => {
   const router = useRouter();
@@ -25,6 +26,36 @@ export const useLabConsole = () => {
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteLabName, setInviteLabName] = useState("");
   const [isInviting, setIsInviting] = useState(false);
+
+  const { get } = useApi();
+  const [emailError, setEmailError] = useState("");
+  const [checkingEmail, setCheckingEmail] = useState(false);
+
+  useEffect(() => {
+    if (!inviteEmail || !inviteEmail.includes("@")) {
+      setEmailError("");
+      return;
+    }
+
+    const delayDebounceFn = setTimeout(async () => {
+      setCheckingEmail(true);
+      const res = await get<any>({
+        endpoint: `/api/auth/check-email?email=${encodeURIComponent(inviteEmail.trim())}`,
+        requireAuth: true,
+      });
+      setCheckingEmail(false);
+
+      if (res.success && res.data?.success && res.data?.data) {
+        if (res.data.data.exists) {
+          setEmailError("This email address is already registered.");
+        } else {
+          setEmailError("");
+        }
+      }
+    }, 500);
+
+    return () => clearTimeout(delayDebounceFn);
+  }, [inviteEmail, get]);
 
   // Maintain grid UI filter state
   const [filters, setFilters] = useState<GridFilters>({
@@ -52,7 +83,7 @@ export const useLabConsole = () => {
 
   useEffect(() => {
     fetchLabs();
-  }, []);
+  }, [fetchLabs]);
 
   // Dynamic status mapping based on isActive boolean and status fields
   const getLabStatus = useCallback(
@@ -383,6 +414,8 @@ export const useLabConsole = () => {
     setInviteLabName,
     isInviting,
     handleInviteSubmit,
+    emailError,
+    checkingEmail,
   };
 };
 
