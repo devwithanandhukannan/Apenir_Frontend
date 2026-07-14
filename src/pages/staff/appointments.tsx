@@ -112,6 +112,10 @@ export default function StaffAppointmentsPage() {
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
   const [members, setMembers] = useState<AppointmentMemberInput[]>([]);
   const [memberSaving, setMemberSaving] = useState(false);
+  const [existingProfiles, setExistingProfiles] = useState<any[]>([]);
+  const [selectedProfiles, setSelectedProfiles] = useState<
+    Record<number, string>
+  >({});
 
   // Status action loading
   const [actionLoading, setActionLoading] = useState(false);
@@ -198,6 +202,11 @@ export default function StaffAppointmentsPage() {
         setOtpDialogOpen(false);
         const count = data.data?.memberCount ?? selected.memberCount ?? 1;
         setOtpVerifiedMemberCount(count);
+
+        const profiles = data.data?.existingProfiles ?? [];
+        setExistingProfiles(profiles);
+        setSelectedProfiles({});
+
         // Initialize member forms
         setMembers(
           Array.from({ length: count }, (_, i) => ({
@@ -265,6 +274,60 @@ export default function StaffAppointmentsPage() {
       next[index] = { ...next[index], [field]: value };
       return next;
     });
+  };
+
+  const handleProfileChange = (i: number, value: string) => {
+    if (value === "new") {
+      setSelectedProfiles((prev) => ({ ...prev, [i]: "new" }));
+      setMembers((prev) => {
+        const next = [...prev];
+        next[i] = {
+          ...next[i],
+          name: "",
+          age: 0,
+          gender: "Other",
+        };
+        return next;
+      });
+      return;
+    }
+
+    const prof = existingProfiles.find((p) => p.id === value);
+    if (prof) {
+      let age = 0;
+      if (prof.dob) {
+        if (prof.dob.startsWith("Age: ")) {
+          age = parseInt(prof.dob.replace("Age: ", "")) || 0;
+        } else {
+          const birthDate = new Date(prof.dob);
+          const today = new Date();
+          age = today.getFullYear() - birthDate.getFullYear();
+          const m = today.getMonth() - birthDate.getMonth();
+          if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+            age--;
+          }
+        }
+      }
+
+      let gender = "Other";
+      if (prof.gender) {
+        const lower = prof.gender.toLowerCase();
+        if (lower.startsWith("m")) gender = "Male";
+        else if (lower.startsWith("f")) gender = "Female";
+      }
+
+      setMembers((prev) => {
+        const next = [...prev];
+        next[i] = {
+          ...next[i],
+          name: prof.name || "",
+          age: age,
+          gender: gender,
+        };
+        return next;
+      });
+      setSelectedProfiles((prev) => ({ ...prev, [i]: value }));
+    }
   };
 
   if (loading) {
@@ -687,6 +750,38 @@ export default function StaffAppointmentsPage() {
                   Member {i + 1}
                 </Typography>
                 <Grid container spacing={1.5}>
+                  {existingProfiles.length > 0 && (
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        label="Select Patient Profile (Optional)"
+                        fullWidth
+                        size="small"
+                        select
+                        value={selectedProfiles[i] || "new"}
+                        onChange={(e) => handleProfileChange(i, e.target.value)}
+                        sx={{ mb: 1 }}
+                      >
+                        <MenuItem value="new">
+                          -- Create New Patient Profile --
+                        </MenuItem>
+                        {existingProfiles.map((p) => {
+                          const details = [];
+                          if (p.gender) details.push(p.gender);
+                          if (p.dob) details.push(p.dob);
+                          const desc =
+                            details.length > 0
+                              ? ` (${details.join(", ")})`
+                              : "";
+                          return (
+                            <MenuItem key={p.id} value={p.id}>
+                              {p.name}
+                              {desc}
+                            </MenuItem>
+                          );
+                        })}
+                      </TextField>
+                    </Grid>
+                  )}
                   <Grid size={{ xs: 12, sm: 6 }}>
                     <TextField
                       label="Name"

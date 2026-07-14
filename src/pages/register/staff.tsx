@@ -92,14 +92,14 @@ export default function RegisterStaff() {
   };
 
   const handleVerifyOtp = async () => {
-    if (!otpCode || otpCode.length !== 4) {
-      toast.error("Please enter a 4-digit code.");
+    if (!otpCode || otpCode.length !== 6) {
+      toast.error("Please enter a 6-digit code.");
       return;
     }
     setIsVerifyingOtp(true);
     const response = await post<any, any>({
       endpoint: "/api/auth/otp/verify-only",
-      body: { phone: phone.trim(), code: otpCode.trim() },
+      body: { phone: phone.trim(), otp: otpCode.trim() },
       requireAuth: false,
     });
     setIsVerifyingOtp(false);

@@ -34,11 +34,13 @@ export function useLabLogin() {
   // Snackbar notification
   const [openSnackbar, setOpenSnackbar] = useState(false);
 
-  // Redirect if already authenticated as a lab user
+  // Redirect if already authenticated as a lab or staff user
   useEffect(() => {
     if (isInitialized && isAuthenticated && user) {
       if (user.role === "lab") {
         router.replace("/lab/lab-console");
+      } else if (user.role === "staff") {
+        router.replace("/staff");
       } else {
         router.replace("/");
       }
@@ -49,7 +51,7 @@ export function useLabLogin() {
   const handleSuccess = useCallback(
     (response: LabLoginResponse) => {
       if (response.success && response.data) {
-        const { labId, email: userEmail, accessToken } = response.data;
+        const { labId, email: userEmail, accessToken, role } = response.data;
 
         // Cache tokens in local storage
         if (typeof window !== "undefined") {
@@ -57,11 +59,12 @@ export function useLabLogin() {
           localStorage.setItem("auth_token", accessToken);
         }
 
+        const isStaff = role === "staff";
         const labUser = {
           id: labId,
-          name: "Lab Staff",
+          name: isStaff ? "Staff Member" : "Lab Staff",
           email: userEmail,
-          role: "lab" as const,
+          role: (isStaff ? "staff" : "lab") as any,
         };
 
         // Store authenticated fields in Redux auth store

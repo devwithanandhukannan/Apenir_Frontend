@@ -16,6 +16,7 @@ export interface LabLoginResponseData {
   expiresIn: number;
   labId: string;
   email: string;
+  role: string;
 }
 
 export interface LabLoginResponse {

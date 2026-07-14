@@ -198,36 +198,99 @@ export default function Home() {
                       role.
                     </Alert>
 
-                    <Button
-                      variant="contained"
-                      color="primary"
-                      onClick={() => simulateLogin("customer")}
-                      startIcon={<PersonIcon />}
-                      sx={{ py: 1.5, background: "#059669" }}
-                      className="bg-blue-800"
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, mb: 1, color: "text.primary" }}
                     >
-                      Login as Customer
-                    </Button>
+                      Real Portals (Production Flow)
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1.5,
+                        mb: 3,
+                      }}
+                    >
+                      <Button
+                        variant="contained"
+                        onClick={() => router.push("/customer/login")}
+                        startIcon={<PersonIcon />}
+                        sx={{
+                          py: 1.2,
+                          bgcolor: "#059669",
+                          "&:hover": { bgcolor: "#047857" },
+                        }}
+                      >
+                        Patient Login (WhatsApp OTP)
+                      </Button>
 
-                    <Button
-                      variant="contained"
-                      color="secondary"
-                      onClick={() => simulateLogin("lab")}
-                      startIcon={<ScienceIcon />}
-                      sx={{ py: 1.5 }}
-                    >
-                      Login as Lab Specialist
-                    </Button>
+                      <Button
+                        variant="contained"
+                        color="secondary"
+                        onClick={() => router.push("/lab/login")}
+                        startIcon={<ScienceIcon />}
+                        sx={{ py: 1.2 }}
+                      >
+                        Lab & Staff Partner Login
+                      </Button>
 
-                    <Button
-                      variant="contained"
-                      color="error"
-                      onClick={() => simulateLogin("admin")}
-                      startIcon={<AdminPanelSettingsIcon />}
-                      sx={{ py: 1.5 }}
+                      <Button
+                        variant="contained"
+                        color="error"
+                        onClick={() => router.push("/admin/login")}
+                        startIcon={<AdminPanelSettingsIcon />}
+                        sx={{ py: 1.2 }}
+                      >
+                        Admin console Login
+                      </Button>
+                    </Box>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, mb: 1, color: "text.secondary" }}
                     >
-                      Login as Administrator
-                    </Button>
+                      Simulation (Quick Testing)
+                    </Typography>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1.5,
+                      }}
+                    >
+                      <Button
+                        variant="outlined"
+                        color="primary"
+                        onClick={() => simulateLogin("customer")}
+                        startIcon={<PersonIcon />}
+                        sx={{ py: 1 }}
+                      >
+                        Simulate Patient
+                      </Button>
+
+                      <Button
+                        variant="outlined"
+                        color="secondary"
+                        onClick={() => simulateLogin("lab")}
+                        startIcon={<ScienceIcon />}
+                        sx={{ py: 1 }}
+                      >
+                        Simulate Lab Specialist
+                      </Button>
+
+                      <Button
+                        variant="outlined"
+                        color="error"
+                        onClick={() => simulateLogin("admin")}
+                        startIcon={<AdminPanelSettingsIcon />}
+                        sx={{ py: 1 }}
+                      >
+                        Simulate Administrator
+                      </Button>
+                    </Box>
                   </Box>
                 )}
               </CardContent>

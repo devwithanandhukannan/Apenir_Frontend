@@ -285,12 +285,81 @@ export function useCustomerService() {
     [post],
   );
 
+  // Send OTP passcode to a phone number
+  const sendOtp = useCallback(
+    async (
+      phone: string,
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: "/api/auth/otp/send",
+        body: { phone },
+        requireAuth: false,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
+  // Verify OTP passcode and login/register user
+  const verifyOtp = useCallback(
+    async (
+      phone: string,
+      otp: string,
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: "/api/auth/otp/verify",
+        body: { phone, otp },
+        requireAuth: false,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
   return {
     getCustomers,
     getMyProfile,
     updateMyProfile,
     getMyAppointments,
     bookAppointment,
+    sendOtp,
+    verifyOtp,
   };
 }
 
