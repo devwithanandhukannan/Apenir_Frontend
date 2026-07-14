@@ -10,8 +10,10 @@ export const TOKEN_KEY = "auth_token";
 const DEFAULT_BASE_URL =
   typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL || "" : "";
 
-// Shared active promise to coordinate concurrent token refresh requests across hook instances
+// Shared active promise and cache to coordinate concurrent token refresh requests across hook instances
 let activeRefreshPromise: Promise<string | null> | null = null;
+let lastRefreshedToken: string | null = null;
+let lastRefreshTime = 0;
 
 // Consistent response structure returned by request methods
 export interface ApiResponse<T> {
@@ -43,6 +45,18 @@ export function useApi() {
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((state) => state.auth.user);
   const token = useAppSelector((state) => state.auth.token);
+
+  // Store refs to ensure request callback is stable and never uses stale closure tokens/user info
+  const currentUserRef = useRef(currentUser);
+  const tokenRef = useRef(token);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
+
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
 
   // Track pending active controllers to abort them on component unmount
   const activeControllers = useRef<Set<AbortController>>(new Set());
@@ -87,9 +101,10 @@ export function useApi() {
         ...customHeaders,
       };
 
-      // Retrieve auth token from Redux state (in-memory only, SSR Safe)
-      if (requireAuth && token) {
-        headers["Authorization"] = `Bearer ${token}`;
+      // Retrieve auth token from ref (in-memory only, SSR Safe)
+      const currentToken = tokenRef.current;
+      if (requireAuth && currentToken) {
+        headers["Authorization"] = `Bearer ${currentToken}`;
       }
 
       const isFullUrl =
@@ -143,37 +158,48 @@ export function useApi() {
           !isAuthEndpoint
         ) {
           try {
-            // Coordinate concurrent refresh token requests
-            if (!activeRefreshPromise) {
-              activeRefreshPromise = (async () => {
-                try {
-                  const refreshResponse = await axios.post<any>(
-                    `${DEFAULT_BASE_URL}/api/Auth/refresh`,
-                    {},
-                    { withCredentials: true },
-                  );
+            let newAccessToken: string | null = null;
 
-                  if (
-                    refreshResponse.data &&
-                    refreshResponse.data.success &&
-                    refreshResponse.data.data?.accessToken
-                  ) {
-                    return refreshResponse.data.data.accessToken;
+            // Reuse recently refreshed token if it was refreshed within the last 10 seconds to resolve race conditions
+            const now = Date.now();
+            if (lastRefreshedToken && now - lastRefreshTime < 10000) {
+              newAccessToken = lastRefreshedToken;
+            } else {
+              // Coordinate concurrent refresh token requests
+              if (!activeRefreshPromise) {
+                activeRefreshPromise = (async () => {
+                  try {
+                    const refreshResponse = await axios.post<any>(
+                      `${DEFAULT_BASE_URL}/api/Auth/refresh`,
+                      {},
+                      { withCredentials: true },
+                    );
+
+                    if (
+                      refreshResponse.data &&
+                      refreshResponse.data.success &&
+                      refreshResponse.data.data?.accessToken
+                    ) {
+                      const tokenVal = refreshResponse.data.data.accessToken;
+                      lastRefreshedToken = tokenVal;
+                      lastRefreshTime = Date.now();
+                      return tokenVal;
+                    }
+                    return null;
+                  } catch (e) {
+                    return null;
+                  } finally {
+                    activeRefreshPromise = null;
                   }
-                  return null;
-                } catch (e) {
-                  return null;
-                } finally {
-                  activeRefreshPromise = null;
-                }
-              })();
-            }
+                })();
+              }
 
-            const newAccessToken = await activeRefreshPromise;
+              newAccessToken = await activeRefreshPromise;
+            }
 
             if (newAccessToken) {
               // Update Redux state
-              let userToLogin = currentUser;
+              let userToLogin = currentUserRef.current;
               if (!userToLogin && typeof window !== "undefined") {
                 const userJson = localStorage.getItem("auth_user");
                 if (userJson) {
@@ -275,7 +301,7 @@ export function useApi() {
         setLoading(false);
       }
     },
-    [currentUser, dispatch, token],
+    [dispatch],
   );
 
   const get = useCallback(
