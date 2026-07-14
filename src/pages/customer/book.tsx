@@ -18,11 +18,12 @@ import Skeleton from "@mui/material/Skeleton";
 import CircularProgress from "@mui/material/CircularProgress";
 import Divider from "@mui/material/Divider";
 import IconButton from "@mui/material/IconButton";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
-import {
-  useCustomerService,
-  BookAppointmentRequest,
-} from "@/core_components/apis/admin/customerService/useCustomerService";
+import { useCustomerService } from "@/core_components/apis/admin/customerService/useCustomerService";
+import MapLocationPicker from "@/component_library/MapLocationPicker";
+
 import ScienceIcon from "@mui/icons-material/Science";
 import LocationOnIcon from "@mui/icons-material/LocationOn";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
@@ -31,6 +32,10 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PeopleIcon from "@mui/icons-material/People";
 import AddIcon from "@mui/icons-material/Add";
 import RemoveIcon from "@mui/icons-material/Remove";
+import ShoppingCartIcon from "@mui/icons-material/ShoppingCart";
+import LocalOfferIcon from "@mui/icons-material/LocalOffer";
+import StorefrontIcon from "@mui/icons-material/Storefront";
+import DeleteIcon from "@mui/icons-material/Delete";
 
 interface ServiceItem {
   id: string;
@@ -39,6 +44,29 @@ interface ServiceItem {
   description?: string;
   basePrice: number;
   isActive: boolean;
+}
+
+interface PackageItem {
+  id: string;
+  name: string;
+  description?: string;
+  basePrice: number;
+  isActive: boolean;
+  serviceIds: string[];
+}
+
+type CartItem = ServiceItem | PackageItem;
+
+interface EligibleLab {
+  branchId: string;
+  name: string;
+  city: string;
+  district: string;
+  distance: number;
+  roadDistance: number;
+  baseTotal: number;
+  travelFee: number;
+  grandTotal: number;
 }
 
 interface SlotItem {
@@ -60,8 +88,9 @@ type ApiResponse<T> = {
 };
 
 const STEPS = [
-  "Select Service",
   "Your Location",
+  "Add to Cart",
+  "Choose Lab",
   "Choose Date & Slot",
   "Review & Confirm",
 ];
@@ -86,6 +115,44 @@ function formatTime(t: string | null) {
   return `${hr12}:${m} ${ampm}`;
 }
 
+function getMemberSlotTimes(
+  startTime: string | null,
+  endTime: string | null,
+  memberCount: number,
+) {
+  if (!startTime || !endTime) return [];
+  const parseTime = (t: string) => {
+    const [h, m] = t.split(":");
+    const d = new Date();
+    d.setHours(parseInt(h), parseInt(m), 0, 0);
+    return d;
+  };
+
+  const start = parseTime(startTime);
+  const end = parseTime(endTime);
+  const totalMinutes = (end.getTime() - start.getTime()) / (1000 * 60);
+  const memberMinutes = totalMinutes / memberCount;
+
+  const times = [];
+  const format24 = (d: Date) => {
+    const h = d.getHours().toString().padStart(2, "0");
+    const m = d.getMinutes().toString().padStart(2, "0");
+    return `${h}:${m}`;
+  };
+
+  for (let i = 0; i < memberCount; i++) {
+    const mStart = new Date(start.getTime() + i * memberMinutes * 60 * 1000);
+    const mEnd = new Date(
+      start.getTime() + (i + 1) * memberMinutes * 60 * 1000,
+    );
+    times.push({
+      start: formatTime(format24(mStart)),
+      end: formatTime(format24(mEnd)),
+    });
+  }
+  return times;
+}
+
 export default function CustomerBookPage() {
   const router = useRouter();
   const { get } = useApi();
@@ -94,107 +161,150 @@ export default function CustomerBookPage() {
   const [step, setStep] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
-  // Step 1: Services
-  const [services, setServices] = useState<ServiceItem[]>([]);
-  const [servicesLoading, setServicesLoading] = useState(false);
-  const [selectedService, setSelectedService] = useState<ServiceItem | null>(
-    null,
-  );
-
-  // Step 2: Location
+  // Step 1: Location
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [locationError, setLocationError] = useState<string | null>(null);
-  const [locationLoading, setLocationLoading] = useState(false);
+  const [addressLine, setAddressLine] = useState("");
   const [building, setBuilding] = useState("");
   const [landmark, setLandmark] = useState("");
   const [floor, setFloor] = useState("");
-  const [memberCount, setMemberCount] = useState(1);
 
-  // Step 3: Slots
+  // Step 2: Services / Packages Cart
+  const [services, setServices] = useState<ServiceItem[]>([]);
+  const [packages, setPackages] = useState<PackageItem[]>([]);
+  const [catalogLoading, setCatalogLoading] = useState(false);
+  const [cart, setCart] = useState<CartItem[]>([]);
+  const [activeTab, setActiveTab] = useState(0); // 0 = Services, 1 = Packages
+
+  // Step 3: Labs List
+  const [eligibleLabs, setEligibleLabs] = useState<EligibleLab[]>([]);
+  const [labsLoading, setLabsLoading] = useState(false);
+  const [selectedLab, setSelectedLab] = useState<EligibleLab | null>(null);
+
+  // Step 4: Slots & Member Count
   const [slots, setSlots] = useState<SlotItem[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
+  const [memberCount, setMemberCount] = useState(1);
 
-  // Step 4: Confirmation
+  // Step 5: Confirmation
   const [booking, setBooking] = useState(false);
   const [booked, setBooked] = useState(false);
   const [bookedApptNumber, setBookedApptNumber] = useState("");
   const [bookedPasscode, setBookedPasscode] = useState("");
   const [bookedAddress, setBookedAddress] = useState("");
 
-  // Load services on mount
-  const loadServices = useCallback(async () => {
-    setServicesLoading(true);
-    await get<ApiResponse<ServiceItem[]>>({
-      endpoint: "/api/services",
-      requireAuth: true,
-      onSuccess: (data) => {
-        setServices(data.data?.filter((s) => s.isActive) ?? []);
-        setServicesLoading(false);
-      },
-      onError: () => {
-        setServicesLoading(false);
-      },
-    });
+  // Load diagnostic items (Services & Packages)
+  const loadCatalog = useCallback(async () => {
+    setCatalogLoading(true);
+    setError(null);
+    try {
+      await get<ApiResponse<ServiceItem[]>>({
+        endpoint: "/api/services",
+        requireAuth: true,
+        onSuccess: (svcRes) => {
+          setServices(svcRes.data?.filter((s) => s.isActive) ?? []);
+        },
+      });
+
+      await get<ApiResponse<PackageItem[]>>({
+        endpoint: "/api/packages",
+        requireAuth: true,
+        onSuccess: (pkgRes) => {
+          setPackages(pkgRes.data?.filter((p) => p.isActive) ?? []);
+        },
+      });
+    } catch (err: any) {
+      setError("Failed to load medical services or package catalog.");
+    } finally {
+      setCatalogLoading(false);
+    }
   }, [get]);
 
   useEffect(() => {
-    loadServices();
-  }, [loadServices]);
+    loadCatalog();
+  }, [loadCatalog]);
 
-  // Auto-detect location
-  const detectLocation = useCallback(() => {
-    setLocationLoading(true);
-    setLocationError(null);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(pos.coords.latitude);
-        setLongitude(pos.coords.longitude);
-        setLocationLoading(false);
-      },
-      (err) => {
-        setLocationError(
-          "Could not detect location. Please enable location access and retry.",
-        );
-        setLocationLoading(false);
-      },
-    );
-  }, []);
-
-  // Load available slots from the real nearby slots endpoint
-  const loadSlots = useCallback(async () => {
-    if (!latitude || !longitude || !selectedService) return;
-    setSlotsLoading(true);
+  // Load eligible lab branches for location & cart
+  const loadEligibleLabs = useCallback(async () => {
+    if (!latitude || !longitude || cart.length === 0) return;
+    setLabsLoading(true);
+    setSelectedLab(null);
     setError(null);
-    await get<ApiResponse<SlotItem[]>>({
-      endpoint: `/api/appointments/slots?latitude=${latitude}&longitude=${longitude}&serviceId=${selectedService.id}`,
+    const itemIds = cart.map((item) => item.id).join(",");
+    await get<ApiResponse<EligibleLab[]>>({
+      endpoint: `/api/appointments/eligible-labs?latitude=${latitude}&longitude=${longitude}&itemIds=${itemIds}`,
       requireAuth: true,
-      onSuccess: (data) => {
-        setSlots(data.data ?? []);
-        setSlotsLoading(false);
+      onSuccess: (res) => {
+        setEligibleLabs(res.data ?? []);
+        setLabsLoading(false);
       },
       onError: (err) => {
-        setError(err?.message ?? "Failed to load available slots near you.");
-        setSlotsLoading(false);
+        setError(
+          err?.message ??
+            "Could not find lab branches offering these services near you.",
+        );
+        setLabsLoading(false);
       },
     });
-  }, [get, latitude, longitude, selectedService]);
+  }, [get, latitude, longitude, cart]);
 
   useEffect(() => {
     if (step === 2) {
+      loadEligibleLabs();
+    }
+  }, [step, loadEligibleLabs]);
+
+  // Load slots for the selected lab branch
+  const loadSlots = useCallback(async () => {
+    if (!selectedLab) return;
+    setSlotsLoading(true);
+    setSelectedSlot(null);
+    setError(null);
+    await get<ApiResponse<SlotItem[]>>({
+      endpoint: `/api/appointments/slots/branch/${selectedLab.branchId}`,
+      requireAuth: true,
+      onSuccess: (res) => {
+        setSlots(res.data ?? []);
+        setSlotsLoading(false);
+      },
+      onError: (err) => {
+        setError(err?.message ?? "Failed to load slots for this branch.");
+        setSlotsLoading(false);
+      },
+    });
+  }, [get, selectedLab]);
+
+  useEffect(() => {
+    if (step === 3) {
       loadSlots();
     }
   }, [step, loadSlots]);
 
+  const handleAddToCart = (item: CartItem) => {
+    if (cart.find((c) => c.id === item.id)) return;
+    setCart((prev) => [...prev, item]);
+  };
+
+  const handleRemoveFromCart = (itemId: string) => {
+    setCart((prev) => prev.filter((item) => item.id !== itemId));
+  };
+
   const handleBook = async () => {
-    if (!selectedService || !selectedSlot || !latitude || !longitude) return;
+    if (
+      !selectedLab ||
+      !selectedSlot ||
+      !latitude ||
+      !longitude ||
+      cart.length === 0
+    )
+      return;
     setBooking(true);
     setError(null);
-    const payload: BookAppointmentRequest = {
+    const payload = {
       latitude,
       longitude,
-      serviceId: selectedService.id,
+      itemIds: cart.map((c) => c.id),
       slotId: selectedSlot.id,
       memberCount,
       buildingDetails: building,
@@ -202,12 +312,12 @@ export default function CustomerBookPage() {
       floor,
     };
     await bookAppointment(payload, {
-      onSuccess: (data) => {
+      onSuccess: (res) => {
         setBooking(false);
         setBooked(true);
-        setBookedApptNumber(data.data?.appointmentNumber ?? "");
-        setBookedPasscode(data.data?.passcode ?? "");
-        setBookedAddress(data.data?.locationAddress ?? "");
+        setBookedApptNumber(res.data?.appointmentNumber ?? "");
+        setBookedPasscode(res.data?.passcode ?? "");
+        setBookedAddress(res.data?.locationAddress ?? "");
       },
       onError: (err) => {
         setBooking(false);
@@ -218,6 +328,13 @@ export default function CustomerBookPage() {
       },
     });
   };
+
+  // Split prices calculation
+  const subtotal = cart.reduce((sum, item) => sum + item.basePrice, 0);
+  const memberDiscount =
+    memberCount > 1 ? Math.round((memberCount - 1) * subtotal * 0.2) : 0;
+  const travelFee = selectedLab?.travelFee ?? 0;
+  const grandTotal = subtotal * memberCount - memberDiscount + travelFee;
 
   if (booked) {
     return (
@@ -233,35 +350,36 @@ export default function CustomerBookPage() {
             Appointment Confirmed!
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            Your home collection has been booked successfully.
+            Your home collection booking is successful. An invoice has been
+            generated.
           </Typography>
           <Card
             elevation={0}
             sx={{
               border: "2px solid",
               borderColor: "primary.main",
-              maxWidth: 420,
+              maxWidth: 450,
               mx: "auto",
-              mb: 3,
+              mb: 4,
             }}
           >
             <CardContent sx={{ textAlign: "left" }}>
               <Typography variant="caption" color="text.secondary">
-                Appointment Number
+                Booking Reference Number
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, mb: 1.5 }}>
                 {bookedApptNumber}
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
               <Typography variant="caption" color="text.secondary">
-                Registered Address & Total Cost
+                Registered Home Collection Address
               </Typography>
               <Typography variant="body2" sx={{ fontWeight: 600, mb: 1.5 }}>
                 {bookedAddress}
               </Typography>
               <Divider sx={{ mb: 1.5 }} />
               <Typography variant="caption" color="text.secondary">
-                Collection Passcode (Share with phlebotomist upon arrival)
+                Phlebotomist Verification Passcode (Share upon arrival)
               </Typography>
               <Typography
                 variant="h4"
@@ -277,13 +395,23 @@ export default function CustomerBookPage() {
               </Typography>
             </CardContent>
           </Card>
-          <Button
-            variant="contained"
-            onClick={() => router.push("/customer")}
-            sx={{ fontWeight: 700 }}
-          >
-            Go to My Appointments
-          </Button>
+          <Box sx={{ display: "flex", gap: 2, justifyContent: "center" }}>
+            <Button
+              variant="outlined"
+              href={`/invoices/Invoice_${bookedApptNumber}.pdf`}
+              target="_blank"
+              sx={{ fontWeight: 700 }}
+            >
+              Download Invoice PDF
+            </Button>
+            <Button
+              variant="contained"
+              onClick={() => router.push("/customer")}
+              sx={{ fontWeight: 700 }}
+            >
+              Go to Dashboard
+            </Button>
+          </Box>
         </Box>
       </>
     );
@@ -293,10 +421,6 @@ export default function CustomerBookPage() {
     <>
       <Head>
         <title>Book Home Collection – Appenir</title>
-        <meta
-          name="description"
-          content="Book a diagnostic home collection visit. Choose your test, share your location, and pick a convenient time slot."
-        />
       </Head>
 
       <Box>
@@ -312,7 +436,7 @@ export default function CustomerBookPage() {
             <ArrowBackIcon fontSize="small" />
           </IconButton>
           <Typography variant="h6" sx={{ fontWeight: 700 }}>
-            Book Home Collection
+            Book Diagnostics Flow
           </Typography>
         </Box>
 
@@ -335,325 +459,366 @@ export default function CustomerBookPage() {
           ))}
         </Stepper>
 
-        {/* Mobile step indicator */}
-        <Box
-          sx={{
-            display: { xs: "flex", sm: "none" },
-            mb: 3,
-            gap: 1,
-            alignItems: "center",
-          }}
-        >
-          <Typography
-            variant="caption"
-            color="text.secondary"
-            sx={{ fontWeight: 600 }}
-          >
-            Step {step + 1} of {STEPS.length}:
-          </Typography>
-          <Typography
-            variant="caption"
-            sx={{ fontWeight: 700, color: "primary.main" }}
-          >
-            {STEPS[step]}
-          </Typography>
-        </Box>
-
         {error && (
           <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError(null)}>
             {error}
           </Alert>
         )}
 
-        {/* Step 1: Select Service */}
+        {/* STEP 1: YOUR LOCATION */}
         {step === 0 && (
           <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Choose the diagnostic test or health package you'd like to book.
+            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+              Select your diagnostic collection location on the map:
             </Typography>
-            {servicesLoading ? (
-              <Grid container spacing={2}>
-                {[1, 2, 3, 4].map((i) => (
-                  <Grid size={{ xs: 12, sm: 6 }} key={i}>
-                    <Skeleton variant="rounded" height={100} />
-                  </Grid>
-                ))}
+
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 8 }}>
+                <MapLocationPicker
+                  value={
+                    latitude && longitude
+                      ? { lat: latitude, lng: longitude }
+                      : undefined
+                  }
+                  onChange={(loc) => {
+                    setLatitude(loc.lat);
+                    setLongitude(loc.lng);
+                    setAddressLine(loc.address);
+                  }}
+                  height={420}
+                  label="Locate Branch or Pinpoint Collection Area"
+                />
               </Grid>
-            ) : (
-              <Grid container spacing={2}>
-                {services.map((service) => (
-                  <Grid size={{ xs: 12, sm: 6 }} key={service.id}>
-                    <Card
-                      elevation={0}
-                      sx={{
-                        border: "1.5px solid",
-                        borderColor:
-                          selectedService?.id === service.id
-                            ? "primary.main"
-                            : "divider",
-                        transition: "border-color 0.2s, box-shadow 0.2s",
-                        "&:hover": {
-                          borderColor: "primary.main",
-                          boxShadow: "0 4px 16px rgba(5,150,105,0.12)",
-                        },
-                      }}
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Card
+                  elevation={0}
+                  sx={{ border: "1px solid", borderColor: "divider", p: 1.5 }}
+                >
+                  <CardContent sx={{ p: 1 }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, mb: 2 }}
                     >
-                      <CardActionArea
-                        onClick={() => setSelectedService(service)}
-                        sx={{ p: 0 }}
-                      >
-                        <CardContent>
-                          <Box
-                            sx={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                            }}
-                          >
-                            <Box sx={{ display: "flex", gap: 1.5 }}>
-                              <ScienceIcon
-                                sx={{
-                                  color:
-                                    selectedService?.id === service.id
-                                      ? "primary.main"
-                                      : "text.disabled",
-                                  fontSize: 22,
-                                  mt: 0.2,
-                                }}
-                              />
-                              <Box>
-                                <Typography
-                                  variant="body2"
-                                  sx={{ fontWeight: 700 }}
-                                >
-                                  {service.name}
-                                </Typography>
-                                <Chip
-                                  label={service.category}
-                                  size="small"
-                                  sx={{
-                                    fontSize: 10,
-                                    height: 18,
-                                    mt: 0.4,
-                                    fontWeight: 600,
-                                  }}
-                                />
-                              </Box>
-                            </Box>
-                            <Box sx={{ textAlign: "right" }}>
-                              <Typography
-                                variant="body2"
-                                sx={{
-                                  fontWeight: 800,
-                                  color: "primary.main",
-                                }}
-                              >
-                                ₹{service.basePrice.toLocaleString("en-IN")}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                base price
-                              </Typography>
-                            </Box>
-                          </Box>
-                          {service.description && (
-                            <Typography
-                              variant="caption"
-                              color="text.secondary"
-                              sx={{ mt: 1, display: "block" }}
-                            >
-                              {service.description}
-                            </Typography>
-                          )}
-                        </CardContent>
-                      </CardActionArea>
-                    </Card>
-                  </Grid>
-                ))}
+                      Address Details
+                    </Typography>
+                    <Grid container spacing={2}>
+                      <Grid size={{ xs: 12 }}>
+                        <TextField
+                          label="Building / House / Flat"
+                          placeholder="e.g. Apartment 405, Tower B"
+                          fullWidth
+                          size="small"
+                          value={building}
+                          onChange={(e) => setBuilding(e.target.value)}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12 }}>
+                        <TextField
+                          label="Floor"
+                          placeholder="e.g. 4th Floor"
+                          fullWidth
+                          size="small"
+                          value={floor}
+                          onChange={(e) => setFloor(e.target.value)}
+                        />
+                      </Grid>
+                      <Grid size={{ xs: 12 }}>
+                        <TextField
+                          label="Landmark"
+                          placeholder="e.g. Next to City Park Gate"
+                          fullWidth
+                          size="small"
+                          value={landmark}
+                          onChange={(e) => setLandmark(e.target.value)}
+                        />
+                      </Grid>
+                    </Grid>
+                  </CardContent>
+                </Card>
               </Grid>
-            )}
-            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 3 }}>
+            </Grid>
+
+            <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 4 }}>
               <Button
                 variant="contained"
-                disabled={!selectedService}
+                disabled={!latitude || !longitude || !building}
                 onClick={() => setStep(1)}
                 sx={{ fontWeight: 700 }}
               >
-                Continue
+                Continue to Cart
               </Button>
             </Box>
           </Box>
         )}
 
-        {/* Step 2: Location */}
+        {/* STEP 2: ADD TO CART */}
         {step === 1 && (
           <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Share your collection address. The phlebotomist will arrive at
-              this location.
-            </Typography>
-
-            {/* GPS Detection */}
-            <Card
-              elevation={0}
-              sx={{
-                border: "1px solid",
-                borderColor: latitude ? "success.main" : "divider",
-                mb: 2,
-              }}
-            >
-              <CardContent
-                sx={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
-                  <LocationOnIcon
-                    sx={{
-                      color: latitude ? "success.main" : "text.disabled",
-                      fontSize: 22,
-                    }}
-                  />
-                  <Box>
-                    <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {latitude
-                        ? `GPS: ${latitude.toFixed(5)}, ${longitude?.toFixed(5)}`
-                        : "GPS Location Not Detected"}
-                    </Typography>
-                    <Typography variant="caption" color="text.secondary">
-                      {latitude
-                        ? "Location detected successfully"
-                        : "Click 'Detect' to use your current location"}
-                    </Typography>
-                  </Box>
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 8 }}>
+                <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 2 }}>
+                  <Tabs
+                    value={activeTab}
+                    onChange={(e, val) => setActiveTab(val)}
+                  >
+                    <Tab
+                      label="🧬 Services"
+                      iconPosition="start"
+                      icon={<ScienceIcon sx={{ fontSize: 18 }} />}
+                      sx={{ fontWeight: 700 }}
+                    />
+                    <Tab
+                      label="📦 Health Packages"
+                      iconPosition="start"
+                      icon={<LocalOfferIcon sx={{ fontSize: 18 }} />}
+                      sx={{ fontWeight: 700 }}
+                    />
+                  </Tabs>
                 </Box>
-                <Button
-                  size="small"
-                  variant={latitude ? "outlined" : "contained"}
-                  onClick={detectLocation}
-                  disabled={locationLoading}
-                  sx={{ fontWeight: 600, flexShrink: 0 }}
-                >
-                  {locationLoading ? (
-                    <CircularProgress size={16} color="inherit" />
-                  ) : latitude ? (
-                    "Re-detect"
-                  ) : (
-                    "Detect"
-                  )}
-                </Button>
-              </CardContent>
-            </Card>
 
-            {locationError && (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                {locationError}
-              </Alert>
-            )}
+                {catalogLoading ? (
+                  <Grid container spacing={2}>
+                    {[1, 2, 3].map((i) => (
+                      <Grid size={{ xs: 12 }} key={i}>
+                        <Skeleton variant="rounded" height={80} />
+                      </Grid>
+                    ))}
+                  </Grid>
+                ) : activeTab === 0 ? (
+                  <Grid container spacing={2}>
+                    {services.map((item) => (
+                      <Grid size={{ xs: 12 }} key={item.id}>
+                        <Card
+                          elevation={0}
+                          sx={{ border: "1px solid", borderColor: "divider" }}
+                        >
+                          <CardContent
+                            sx={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              py: 1.5,
+                            }}
+                          >
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 700 }}
+                              >
+                                {item.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {item.category} ·{" "}
+                                {item.description ??
+                                  "NABL Certified Diagnostic Test"}
+                              </Typography>
+                            </Box>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 2,
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 800, color: "primary.main" }}
+                              >
+                                ₹{item.basePrice}
+                              </Typography>
+                              <Button
+                                size="small"
+                                variant={
+                                  cart.find((c) => c.id === item.id)
+                                    ? "outlined"
+                                    : "contained"
+                                }
+                                color={
+                                  cart.find((c) => c.id === item.id)
+                                    ? "secondary"
+                                    : "primary"
+                                }
+                                onClick={() => handleAddToCart(item)}
+                                disabled={!!cart.find((c) => c.id === item.id)}
+                              >
+                                {cart.find((c) => c.id === item.id)
+                                  ? "Added"
+                                  : "Add to Cart"}
+                              </Button>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                ) : (
+                  <Grid container spacing={2}>
+                    {packages.map((item) => (
+                      <Grid size={{ xs: 12 }} key={item.id}>
+                        <Card
+                          elevation={0}
+                          sx={{ border: "1px solid", borderColor: "divider" }}
+                        >
+                          <CardContent
+                            sx={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              py: 1.5,
+                            }}
+                          >
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 700 }}
+                              >
+                                {item.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                Health Package Deal ·{" "}
+                                {item.description ??
+                                  "Comprehensive custom diagnostic profile"}
+                              </Typography>
+                            </Box>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 2,
+                              }}
+                            >
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 800, color: "primary.main" }}
+                              >
+                                ₹{item.basePrice}
+                              </Typography>
+                              <Button
+                                size="small"
+                                variant={
+                                  cart.find((c) => c.id === item.id)
+                                    ? "outlined"
+                                    : "contained"
+                                }
+                                color={
+                                  cart.find((c) => c.id === item.id)
+                                    ? "secondary"
+                                    : "primary"
+                                }
+                                onClick={() => handleAddToCart(item)}
+                                disabled={!!cart.find((c) => c.id === item.id)}
+                              >
+                                {cart.find((c) => c.id === item.id)
+                                  ? "Added"
+                                  : "Add to Cart"}
+                              </Button>
+                            </Box>
+                          </CardContent>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+              </Grid>
 
-            {/* Address Details */}
-            <Grid container spacing={2}>
-              <Grid size={{ xs: 12, sm: 8 }}>
-                <TextField
-                  label="Building / House Details"
-                  placeholder="Flat 4B, Sunrise Apartments"
-                  fullWidth
-                  size="small"
-                  value={building}
-                  onChange={(e) => setBuilding(e.target.value)}
-                />
-              </Grid>
-              <Grid size={{ xs: 12, sm: 4 }}>
-                <TextField
-                  label="Floor"
-                  placeholder="3rd"
-                  fullWidth
-                  size="small"
-                  value={floor}
-                  onChange={(e) => setFloor(e.target.value)}
-                />
-              </Grid>
-              <Grid size={{ xs: 12 }}>
-                <TextField
-                  label="Landmark (optional)"
-                  placeholder="Near City Hospital gate"
-                  fullWidth
-                  size="small"
-                  value={landmark}
-                  onChange={(e) => setLandmark(e.target.value)}
-                />
-              </Grid>
-
-              {/* Member Count */}
-              <Grid size={{ xs: 12 }}>
+              {/* Shopping Cart sidebar */}
+              <Grid size={{ xs: 12, md: 4 }}>
                 <Card
                   elevation={0}
-                  sx={{ border: "1px solid", borderColor: "divider" }}
+                  sx={{
+                    border: "1.5px solid",
+                    borderColor: "primary.main",
+                    p: 1.5,
+                  }}
                 >
-                  <CardContent sx={{ py: 1.5 }}>
+                  <CardContent sx={{ p: 1 }}>
                     <Box
                       sx={{
                         display: "flex",
-                        justifyContent: "space-between",
+                        gap: 1,
                         alignItems: "center",
+                        mb: 2,
                       }}
                     >
-                      <Box
-                        sx={{ display: "flex", gap: 1, alignItems: "center" }}
-                      >
-                        <PeopleIcon
-                          sx={{ fontSize: 18, color: "primary.main" }}
-                        />
-                        <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                          Number of Members
-                        </Typography>
-                      </Box>
-                      <Box
-                        sx={{ display: "flex", alignItems: "center", gap: 1.5 }}
-                      >
-                        <IconButton
-                          size="small"
-                          onClick={() =>
-                            setMemberCount((c) => Math.max(1, c - 1))
-                          }
-                          disabled={memberCount <= 1}
-                          sx={{ border: "1px solid", borderColor: "divider" }}
-                        >
-                          <RemoveIcon fontSize="small" />
-                        </IconButton>
-                        <Typography
-                          variant="body1"
-                          sx={{
-                            fontWeight: 700,
-                            minWidth: 24,
-                            textAlign: "center",
-                          }}
-                        >
-                          {memberCount}
-                        </Typography>
-                        <IconButton
-                          size="small"
-                          onClick={() =>
-                            setMemberCount((c) => Math.min(10, c + 1))
-                          }
-                          sx={{ border: "1px solid", borderColor: "divider" }}
-                        >
-                          <AddIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
+                      <ShoppingCartIcon color="primary" />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                        Cart Items ({cart.length})
+                      </Typography>
                     </Box>
-                    {memberCount > 1 && (
+                    <Divider sx={{ mb: 2 }} />
+
+                    {cart.length === 0 ? (
                       <Typography
                         variant="caption"
                         color="text.secondary"
-                        sx={{ mt: 0.5, display: "block" }}
+                        sx={{ display: "block", textAlign: "center", py: 4 }}
                       >
-                        Additional members are charged at 80% of the base rate.
+                        Your cart is empty. Add a service or health package to
+                        continue.
                       </Typography>
+                    ) : (
+                      <Box>
+                        {cart.map((item) => (
+                          <Box
+                            key={item.id}
+                            sx={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
+                              mb: 1.5,
+                            }}
+                          >
+                            <Box sx={{ maxWidth: "70%" }}>
+                              <Typography
+                                variant="caption"
+                                sx={{ fontWeight: 700, display: "block" }}
+                              >
+                                {item.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                ₹{item.basePrice}
+                              </Typography>
+                            </Box>
+                            <IconButton
+                              size="small"
+                              color="error"
+                              onClick={() => handleRemoveFromCart(item.id)}
+                            >
+                              <DeleteIcon sx={{ fontSize: 16 }} />
+                            </IconButton>
+                          </Box>
+                        ))}
+                        <Divider sx={{ my: 2 }} />
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            mb: 2,
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            Subtotal:
+                          </Typography>
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: 800, color: "primary.main" }}
+                          >
+                            ₹{subtotal}
+                          </Typography>
+                        </Box>
+                      </Box>
                     )}
                   </CardContent>
                 </Card>
@@ -664,8 +829,8 @@ export default function CustomerBookPage() {
               sx={{
                 display: "flex",
                 justifyContent: "flex-end",
-                mt: 3,
-                gap: 1.5,
+                gap: 2,
+                mt: 4,
               }}
             >
               <Button
@@ -677,108 +842,103 @@ export default function CustomerBookPage() {
               </Button>
               <Button
                 variant="contained"
-                disabled={!latitude}
+                disabled={cart.length === 0}
                 onClick={() => setStep(2)}
                 sx={{ fontWeight: 700 }}
               >
-                Continue
+                Choose Laboratory
               </Button>
             </Box>
           </Box>
         )}
 
-        {/* Step 3: Date & Slot */}
+        {/* STEP 3: CHOOSE LAB */}
         {step === 2 && (
           <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Select an available date and time slot for your home collection.
-              We fetch these slots dynamically from nearby branches.
+            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+              Available Laboratories offering all selected services nearby:
             </Typography>
 
-            {slotsLoading ? (
+            {labsLoading ? (
               <Grid container spacing={2}>
-                {[1, 2, 3, 4, 5, 6].map((i) => (
-                  <Grid size={{ xs: 6, sm: 4 }} key={i}>
-                    <Skeleton variant="rounded" height={72} />
+                {[1, 2].map((i) => (
+                  <Grid size={{ xs: 12 }} key={i}>
+                    <Skeleton variant="rounded" height={100} />
                   </Grid>
                 ))}
               </Grid>
-            ) : slots.length === 0 ? (
-              <Alert severity="info">
-                No laboratory branches offering this service exist within range
-                of your current location.
+            ) : eligibleLabs.length === 0 ? (
+              <Alert severity="warning">
+                We are sorry, but no laboratory branches offering these services
+                are available within range of your current location. Please
+                update your cart items or choose a different location.
               </Alert>
             ) : (
               <Grid container spacing={2}>
-                {slots.map((slot) => (
-                  <Grid size={{ xs: 6, sm: 4 }} key={slot.id}>
+                {eligibleLabs.map((lab) => (
+                  <Grid size={{ xs: 12 }} key={lab.branchId}>
                     <Card
                       elevation={0}
                       sx={{
                         border: "1.5px solid",
                         borderColor:
-                          selectedSlot?.id === slot.id
+                          selectedLab?.branchId === lab.branchId
                             ? "primary.main"
                             : "divider",
-                        opacity: slot.isAvailable ? 1 : 0.5,
-                        transition: "border-color 0.2s",
-                        "&:hover": slot.isAvailable
-                          ? { borderColor: "primary.main" }
-                          : {},
+                        transition: "border-color 0.2s, box-shadow 0.2s",
+                        "&:hover": { borderColor: "primary.main" },
                       }}
                     >
                       <CardActionArea
-                        disabled={!slot.isAvailable}
-                        onClick={() => setSelectedSlot(slot)}
+                        onClick={() => setSelectedLab(lab)}
                         sx={{ p: 0 }}
                       >
-                        <CardContent sx={{ py: 1.5 }}>
+                        <CardContent
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            py: 2,
+                          }}
+                        >
                           <Box
                             sx={{
                               display: "flex",
-                              gap: 0.8,
+                              gap: 1.5,
                               alignItems: "center",
-                              mb: 0.5,
                             }}
                           >
-                            <CalendarTodayIcon
-                              sx={{
-                                fontSize: 13,
-                                color:
-                                  selectedSlot?.id === slot.id
-                                    ? "primary.main"
-                                    : "text.disabled",
-                              }}
-                            />
+                            <StorefrontIcon color="primary" />
+                            <Box>
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 700 }}
+                              >
+                                {lab.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {lab.city}, {lab.district} ·{" "}
+                                {lab.distance.toFixed(1)} km (straight-line) ·{" "}
+                                {lab.roadDistance.toFixed(1)} km (road)
+                              </Typography>
+                            </Box>
+                          </Box>
+                          <Box sx={{ textAlign: "right" }}>
+                            <Typography
+                              variant="body1"
+                              sx={{ fontWeight: 800, color: "primary.main" }}
+                            >
+                              ₹{lab.grandTotal}
+                            </Typography>
                             <Typography
                               variant="caption"
-                              sx={{ fontWeight: 700 }}
+                              color="text.secondary"
                             >
-                              {formatDate(slot.slotDate)}
+                              Base ₹{lab.baseTotal} + Travel ₹{lab.travelFee}
                             </Typography>
-                          </Box>
-                          <Typography
-                            variant="body2"
-                            sx={{
-                              fontWeight: 600,
-                              color:
-                                selectedSlot?.id === slot.id
-                                  ? "primary.main"
-                                  : "text.primary",
-                            }}
-                          >
-                            {formatTime(slot.startTime)}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary">
-                            until {formatTime(slot.endTime)}
-                          </Typography>
-                          <Box sx={{ mt: 0.5 }}>
-                            <Chip
-                              label={slot.isAvailable ? "Available" : "Full"}
-                              size="small"
-                              color={slot.isAvailable ? "success" : "default"}
-                              sx={{ fontSize: 10, height: 16, fontWeight: 600 }}
-                            />
                           </Box>
                         </CardContent>
                       </CardActionArea>
@@ -792,8 +952,8 @@ export default function CustomerBookPage() {
               sx={{
                 display: "flex",
                 justifyContent: "flex-end",
-                mt: 3,
-                gap: 1.5,
+                gap: 2,
+                mt: 4,
               }}
             >
               <Button
@@ -805,8 +965,180 @@ export default function CustomerBookPage() {
               </Button>
               <Button
                 variant="contained"
-                disabled={!selectedSlot}
+                disabled={!selectedLab}
                 onClick={() => setStep(3)}
+                sx={{ fontWeight: 700 }}
+              >
+                Choose Slot & Members
+              </Button>
+            </Box>
+          </Box>
+        )}
+
+        {/* STEP 4: CHOOSE DATE & SLOT */}
+        {step === 3 && (
+          <Box>
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 8 }}>
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+                  Select an available slot for {selectedLab?.name}:
+                </Typography>
+
+                {slotsLoading ? (
+                  <Grid container spacing={2}>
+                    {[1, 2, 3].map((i) => (
+                      <Grid size={{ xs: 6, sm: 4 }} key={i}>
+                        <Skeleton variant="rounded" height={70} />
+                      </Grid>
+                    ))}
+                  </Grid>
+                ) : slots.length === 0 ? (
+                  <Alert severity="info">
+                    No available time slots found for this laboratory branch in
+                    the upcoming 7 days.
+                  </Alert>
+                ) : (
+                  <Grid container spacing={2}>
+                    {slots.map((slot) => (
+                      <Grid size={{ xs: 6, sm: 4 }} key={slot.id}>
+                        <Card
+                          elevation={0}
+                          sx={{
+                            border: "1.5px solid",
+                            borderColor:
+                              selectedSlot?.id === slot.id
+                                ? "primary.main"
+                                : "divider",
+                            opacity: slot.isAvailable ? 1 : 0.5,
+                          }}
+                        >
+                          <CardActionArea
+                            disabled={!slot.isAvailable}
+                            onClick={() => setSelectedSlot(slot)}
+                            sx={{ p: 0 }}
+                          >
+                            <CardContent sx={{ py: 1.5, textAlign: "center" }}>
+                              <Typography
+                                variant="caption"
+                                sx={{ fontWeight: 700, display: "block" }}
+                              >
+                                {formatDate(slot.slotDate)}
+                              </Typography>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight: 600,
+                                  mt: 0.5,
+                                  color: "primary.main",
+                                }}
+                              >
+                                {formatTime(slot.startTime)}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                until {formatTime(slot.endTime)}
+                              </Typography>
+                            </CardContent>
+                          </CardActionArea>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                )}
+              </Grid>
+
+              {/* Members selector */}
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Card
+                  elevation={0}
+                  sx={{ border: "1px solid", borderColor: "divider", p: 1.5 }}
+                >
+                  <CardContent sx={{ p: 1 }}>
+                    <Box
+                      sx={{
+                        display: "flex",
+                        gap: 1,
+                        alignItems: "center",
+                        mb: 2,
+                      }}
+                    >
+                      <PeopleIcon color="primary" />
+                      <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                        Number of Persons
+                      </Typography>
+                    </Box>
+                    <Divider sx={{ mb: 2 }} />
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        mb: 2,
+                      }}
+                    >
+                      <IconButton
+                        size="small"
+                        disabled={memberCount <= 1}
+                        onClick={() => setMemberCount((c) => c - 1)}
+                        sx={{ border: "1px solid", borderColor: "divider" }}
+                      >
+                        <RemoveIcon />
+                      </IconButton>
+                      <Typography variant="body1" sx={{ fontWeight: 800 }}>
+                        {memberCount}
+                      </Typography>
+                      <IconButton
+                        size="small"
+                        disabled={
+                          selectedSlot
+                            ? memberCount >=
+                              selectedSlot.maxCapacity -
+                                selectedSlot.bookedCount
+                            : memberCount >= 6
+                        }
+                        onClick={() => setMemberCount((c) => c + 1)}
+                        sx={{ border: "1px solid", borderColor: "divider" }}
+                      >
+                        <AddIcon />
+                      </IconButton>
+                    </Box>
+                    {memberCount > 1 && (
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ display: "block", textAlign: "center" }}
+                      >
+                        Additional members are charged at 80% (20% discount on
+                        base rates).
+                      </Typography>
+                    )}
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 2,
+                mt: 4,
+              }}
+            >
+              <Button
+                variant="outlined"
+                onClick={() => setStep(2)}
+                sx={{ fontWeight: 600 }}
+              >
+                Back
+              </Button>
+              <Button
+                variant="contained"
+                disabled={!selectedSlot}
+                onClick={() => setStep(4)}
                 sx={{ fontWeight: 700 }}
               >
                 Review Booking
@@ -815,139 +1147,233 @@ export default function CustomerBookPage() {
           </Box>
         )}
 
-        {/* Step 4: Review & Confirm */}
-        {step === 3 && (
+        {/* STEP 5: REVIEW & CONFIRM */}
+        {step === 4 && (
           <Box>
-            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Please review your booking details before confirming.
-            </Typography>
-
-            <Card
-              elevation={0}
-              sx={{ border: "1px solid", borderColor: "divider", mb: 3 }}
-            >
-              <CardContent>
-                <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: 700, mb: 1.5 }}
+            <Grid container spacing={3}>
+              <Grid size={{ xs: 12, md: 8 }}>
+                <Card
+                  elevation={0}
+                  sx={{ border: "1px solid", borderColor: "divider", p: 2 }}
                 >
-                  Booking Summary
-                </Typography>
-                <Divider sx={{ mb: 1.5 }} />
-
-                <Grid container spacing={1.5}>
-                  {[
-                    {
-                      label: "Diagnostic Test",
-                      value: selectedService?.name ?? "—",
-                    },
-                    {
-                      label: "Category",
-                      value: selectedService?.category ?? "—",
-                    },
-                    {
-                      label: "Date",
-                      value: formatDate(selectedSlot?.slotDate ?? null),
-                    },
-                    {
-                      label: "Time",
-                      value: formatTime(selectedSlot?.startTime ?? null),
-                    },
-                    {
-                      label: "Members",
-                      value: memberCount.toString(),
-                    },
-                    {
-                      label: "Building",
-                      value: building || "—",
-                    },
-                    {
-                      label: "Floor",
-                      value: floor || "—",
-                    },
-                    {
-                      label: "Landmark",
-                      value: landmark || "—",
-                    },
-                  ].map(({ label, value }) => (
-                    <Grid size={{ xs: 6 }} key={label}>
-                      <Typography variant="caption" color="text.secondary">
-                        {label}
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {value}
-                      </Typography>
-                    </Grid>
-                  ))}
-                </Grid>
-
-                <Divider sx={{ my: 1.5 }} />
-
-                <Box
-                  sx={{
-                    display: "flex",
-                    justifyContent: "space-between",
-                    alignItems: "center",
-                  }}
-                >
-                  <Typography variant="body2" color="text.secondary">
-                    Estimated Base Total
-                  </Typography>
-                  <Box sx={{ textAlign: "right" }}>
+                  <CardContent sx={{ p: 0 }}>
                     <Typography
-                      variant="h6"
-                      sx={{ fontWeight: 800, color: "primary.main" }}
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, mb: 1.5 }}
                     >
-                      ₹
-                      {selectedService
-                        ? (
-                            selectedService.basePrice +
-                            (memberCount > 1
-                              ? Math.round(
-                                  (memberCount - 1) *
-                                    selectedService.basePrice *
-                                    0.8,
-                                )
-                              : 0)
-                          ).toLocaleString("en-IN")
-                        : "—"}
+                      Receipt & Detailed Booking Breakdown
                     </Typography>
-                    {memberCount > 1 && (
-                      <Typography variant="caption" color="text.secondary">
-                        {memberCount} members (20% discount on additional)
+                    <Divider sx={{ mb: 2 }} />
+
+                    {/* Detailed Services list with pricing */}
+                    <Box sx={{ mb: 2 }}>
+                      <Typography
+                        variant="caption"
+                        color="text.secondary"
+                        sx={{ fontWeight: 700, mb: 1, display: "block" }}
+                      >
+                        Selected Tests & Cost Details
                       </Typography>
-                    )}
-                  </Box>
-                </Box>
-              </CardContent>
-            </Card>
+                      {cart.map((item) => (
+                        <Box
+                          key={item.id}
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            mb: 1,
+                          }}
+                        >
+                          <Typography variant="body2">• {item.name}</Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                            ₹{item.basePrice}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
 
-            <Alert severity="info" sx={{ mb: 3, fontSize: 12 }}>
-              A 4-digit verification passcode will be generated for security.
-              Also note that travel charges calculated dynamically by road
-              distance (using OSRM routing) from the dispatch branch will be
-              added to the final invoice total.
-            </Alert>
+                    <Divider sx={{ my: 1.5, borderStyle: "dashed" }} />
 
-            <Box sx={{ display: "flex", justifyContent: "flex-end", gap: 1.5 }}>
+                    {/* Pricing breakdown above the total */}
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 1,
+                        mb: 2,
+                      }}
+                    >
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          Base Subtotal ({memberCount} person
+                          {memberCount > 1 ? "s" : ""})
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                          ₹{subtotal * memberCount}
+                        </Typography>
+                      </Box>
+                      {memberCount > 1 && (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Typography variant="caption" color="success.main">
+                            Member discount (20% on additional members)
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="success.main"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            - ₹{memberDiscount}
+                          </Typography>
+                        </Box>
+                      )}
+                      <Box
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          Travel Service Fee (Road distance:{" "}
+                          {selectedLab?.roadDistance.toFixed(2)} km)
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                          + ₹{travelFee}
+                        </Typography>
+                      </Box>
+                    </Box>
+
+                    <Divider sx={{ my: 2 }} />
+
+                    <Box
+                      sx={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <Typography variant="body1" sx={{ fontWeight: 700 }}>
+                        Grand Total Amount:
+                      </Typography>
+                      <Typography
+                        variant="h5"
+                        sx={{ fontWeight: 800, color: "primary.main" }}
+                      >
+                        ₹{grandTotal}
+                      </Typography>
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+
+              {/* Time slot breakdown per user */}
+              <Grid size={{ xs: 12, md: 4 }}>
+                <Card
+                  elevation={0}
+                  sx={{ border: "1px solid", borderColor: "divider", p: 2 }}
+                >
+                  <CardContent sx={{ p: 0 }}>
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 700, mb: 1.5 }}
+                    >
+                      Schedule & Slots Per User
+                    </Typography>
+                    <Divider sx={{ mb: 2 }} />
+
+                    <Box sx={{ mb: 2 }}>
+                      <Typography variant="caption" color="text.secondary">
+                        Overall Appointment Slot
+                      </Typography>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        {formatDate(selectedSlot?.slotDate ?? null)} @{" "}
+                        {formatTime(selectedSlot?.startTime ?? null)} -{" "}
+                        {formatTime(selectedSlot?.endTime ?? null)}
+                      </Typography>
+                    </Box>
+
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ fontWeight: 700, display: "block", mb: 1 }}
+                    >
+                      Allocated Timing Per Member
+                    </Typography>
+                    <Box
+                      sx={{ display: "flex", flexDirection: "column", gap: 1 }}
+                    >
+                      {getMemberSlotTimes(
+                        selectedSlot?.startTime ?? null,
+                        selectedSlot?.endTime ?? null,
+                        memberCount,
+                      ).map((slotTime, idx) => (
+                        <Box
+                          key={idx}
+                          sx={{
+                            p: 1,
+                            bgcolor: "background.default",
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: 1,
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            sx={{ fontWeight: 700, display: "block" }}
+                          >
+                            {idx === 0
+                              ? "Member 1 (Primary Patient)"
+                              : `Member ${idx + 1}`}
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            color="primary.main"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            Timing: {slotTime.start} to {slotTime.end}
+                          </Typography>
+                        </Box>
+                      ))}
+                    </Box>
+                  </CardContent>
+                </Card>
+              </Grid>
+            </Grid>
+
+            <Box
+              sx={{
+                display: "flex",
+                justifyContent: "flex-end",
+                gap: 2,
+                mt: 4,
+              }}
+            >
               <Button
                 variant="outlined"
-                onClick={() => setStep(2)}
                 disabled={booking}
+                onClick={() => setStep(3)}
                 sx={{ fontWeight: 600 }}
               >
                 Back
               </Button>
               <Button
                 variant="contained"
-                onClick={handleBook}
                 disabled={booking}
-                sx={{ fontWeight: 700, minWidth: 140 }}
+                onClick={handleBook}
+                sx={{ fontWeight: 700, minWidth: 150 }}
               >
                 {booking ? (
                   <CircularProgress size={18} color="inherit" />
                 ) : (
-                  "Confirm Booking"
+                  "Confirm & Pay"
                 )}
               </Button>
             </Box>

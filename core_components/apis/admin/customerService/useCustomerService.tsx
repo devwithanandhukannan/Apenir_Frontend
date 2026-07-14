@@ -98,7 +98,8 @@ export interface CustomerAppointmentsResponse {
 export interface BookAppointmentRequest {
   latitude: number;
   longitude: number;
-  serviceId: string;
+  serviceId?: string;
+  itemIds?: string[];
   slotId: string;
   memberCount: number;
   buildingDetails: string;
@@ -352,6 +353,39 @@ export function useCustomerService() {
     [post],
   );
 
+  // Cancel an appointment
+  const cancelAppointment = useCallback(
+    async (
+      id: string,
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: `/api/appointments/${id}/cancel`,
+        body: null,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
   return {
     getCustomers,
     getMyProfile,
@@ -360,6 +394,7 @@ export function useCustomerService() {
     bookAppointment,
     sendOtp,
     verifyOtp,
+    cancelAppointment,
   };
 }
 

@@ -70,7 +70,7 @@ function formatTime(t: string | null) {
 
 export default function CustomerDashboard() {
   const { user } = useAppSelector((state) => state.auth);
-  const { getMyAppointments } = useCustomerService();
+  const { getMyAppointments, cancelAppointment } = useCustomerService();
   const router = useRouter();
 
   const [appointments, setAppointments] = useState<CustomerAppointmentItem[]>(
@@ -93,6 +93,20 @@ export default function CustomerDashboard() {
       },
     });
   }, [getMyAppointments]);
+
+  const handleCancel = async (id: string) => {
+    if (!window.confirm("Are you sure you want to cancel this booking?"))
+      return;
+    setError(null);
+    await cancelAppointment(id, {
+      onSuccess: () => {
+        loadAppointments();
+      },
+      onError: (err) => {
+        setError(err?.message ?? "Failed to cancel appointment.");
+      },
+    });
+  };
 
   useEffect(() => {
     loadAppointments();
@@ -446,6 +460,31 @@ export default function CustomerDashboard() {
                           </Typography>
                         </Box>
                       )}
+                      <Box sx={{ display: "flex", gap: 1.5, mt: 2 }}>
+                        {appt.status <= 3 && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="error"
+                            onClick={() => handleCancel(appt.id)}
+                            sx={{ fontWeight: 600, textTransform: "none" }}
+                          >
+                            Cancel Booking
+                          </Button>
+                        )}
+                        {appt.status >= 2 && (
+                          <Button
+                            size="small"
+                            variant="outlined"
+                            color="primary"
+                            href={`/invoices/Invoice_${appt.appointmentNumber}.pdf`}
+                            target="_blank"
+                            sx={{ fontWeight: 600, textTransform: "none" }}
+                          >
+                            View Invoice
+                          </Button>
+                        )}
+                      </Box>
                     </CardContent>
                   </Card>
                 </Grid>
@@ -467,7 +506,24 @@ export default function CustomerDashboard() {
               <List disablePadding>
                 {pastAppts.map((appt, i) => (
                   <React.Fragment key={appt.id}>
-                    <ListItem sx={{ px: 2.5, py: 1.5 }}>
+                    <ListItem
+                      sx={{ px: 2.5, py: 1.5 }}
+                      secondaryAction={
+                        <Button
+                          size="small"
+                          variant="text"
+                          href={`/invoices/Invoice_${appt.appointmentNumber}.pdf`}
+                          target="_blank"
+                          sx={{
+                            fontWeight: 600,
+                            textTransform: "none",
+                            fontSize: 12,
+                          }}
+                        >
+                          Invoice
+                        </Button>
+                      }
+                    >
                       <ListItemText
                         primary={
                           <Box
