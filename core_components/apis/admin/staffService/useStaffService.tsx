@@ -329,6 +329,35 @@ export function useStaffService() {
     [post],
   );
 
+  // Get members of an appointment
+  const getAppointmentMembers = useCallback(
+    async (
+      appointmentId: string,
+      options?: Omit<BaseRequestOptions<any>, "endpoint" | "requireAuth">,
+    ) => {
+      const response = await get<any>({
+        endpoint: `/api/staff/appointments/${appointmentId}/members`,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
   // Get phlebotomist daily/weekly statistics and history
   const getStaffStats = useCallback(
     async (
@@ -368,6 +397,7 @@ export function useStaffService() {
     addAppointmentMembers,
     registerMemberProfile,
     getStaffStats,
+    getAppointmentMembers,
   };
 }
 

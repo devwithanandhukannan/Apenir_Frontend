@@ -12,6 +12,8 @@ import Skeleton from "@mui/material/Skeleton";
 import Alert from "@mui/material/Alert";
 import Divider from "@mui/material/Divider";
 import TextField from "@mui/material/TextField";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import IconButton from "@mui/material/IconButton";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
@@ -120,6 +122,7 @@ export default function StaffAppointmentsPage() {
     verifyOtp,
     addAppointmentMembers,
     registerMemberProfile,
+    getAppointmentMembers,
   } = useStaffService();
 
   const [appointments, setAppointments] = useState<StaffAppointmentItem[]>([]);
@@ -143,6 +146,7 @@ export default function StaffAppointmentsPage() {
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
   const [members, setMembers] = useState<AppointmentMemberInput[]>([]);
   const [memberSaving, setMemberSaving] = useState(false);
+  const [loadingMembers, setLoadingMembers] = useState(false);
   const [existingProfiles, setExistingProfiles] = useState<any[]>([]);
   const [selectedProfiles, setSelectedProfiles] = useState<
     Record<number, string>
@@ -262,6 +266,18 @@ export default function StaffAppointmentsPage() {
     });
   };
 
+  const getBookedItemOptions = (locationAddress?: string): string[] => {
+    if (!locationAddress) return [];
+    const parts = locationAddress.split(" | Tests: ");
+    if (parts.length > 1) {
+      return parts[1]
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
+    }
+    return [];
+  };
+
   const handleVerifyOtp = async () => {
     if (!selected) return;
     setOtpVerifying(true);
@@ -281,20 +297,43 @@ export default function StaffAppointmentsPage() {
         setExistingProfiles(profiles);
         setSelectedProfiles({});
 
-        // Initialize member list
-        setMembers(
-          Array.from({ length: count }, (_, i) => ({
-            name: "",
-            age: 0,
-            gender: "Other",
-            relationship: i === 0 ? "Self" : "Family Member",
-            additionalNotes: "",
-            uniqueNumber: `MEM-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-            testName: "Routine Blood Test",
-          })),
-        );
-        setMemberDialogOpen(true);
-        loadAppointments();
+        // Fetch existing members from the database if they exist
+        getAppointmentMembers(selected.id, {
+          onSuccess: (res) => {
+            if (res.data && res.data.length > 0) {
+              setMembers(res.data);
+            } else {
+              setMembers(
+                Array.from({ length: count }, (_, i) => ({
+                  name: i === 0 ? selected.customerName || "" : "",
+                  age: 0,
+                  gender: "Male",
+                  relationship: i === 0 ? "Self" : "Family Member",
+                  additionalNotes: "",
+                  uniqueNumber: `MEM-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                  testName: "",
+                })),
+              );
+            }
+            setMemberDialogOpen(true);
+            loadAppointments();
+          },
+          onError: () => {
+            setMembers(
+              Array.from({ length: count }, (_, i) => ({
+                name: i === 0 ? selected.customerName || "" : "",
+                age: 0,
+                gender: "Male",
+                relationship: i === 0 ? "Self" : "Family Member",
+                additionalNotes: "",
+                uniqueNumber: `MEM-${Math.random().toString(36).substring(2, 10).toUpperCase()}`,
+                testName: "",
+              })),
+            );
+            setMemberDialogOpen(true);
+            loadAppointments();
+          },
+        });
       },
       onError: (err) => {
         setOtpVerifying(false);
@@ -305,12 +344,33 @@ export default function StaffAppointmentsPage() {
 
   const handleSaveMembers = async () => {
     if (!selected) return;
+
+    // Check total count constraint
+    if (members.length > selected.memberCount) {
+      setSnackbar({
+        open: true,
+        message: `You can only add up to ${selected.memberCount} members for this appointment.`,
+        severity: "error",
+      });
+      return;
+    }
+
     // Validate rows
     for (let i = 0; i < members.length; i++) {
-      if (!members[i].name.trim()) {
+      const member = members[i];
+      if (!member) continue;
+      if (!member.name.trim()) {
         setSnackbar({
           open: true,
           message: `Member ${i + 1} requires a valid name.`,
+          severity: "error",
+        });
+        return;
+      }
+      if (!member.testName || !member.testName.trim()) {
+        setSnackbar({
+          open: true,
+          message: `Please select at least one booked test/package for Member ${i + 1}.`,
           severity: "error",
         });
         return;
@@ -338,6 +398,53 @@ export default function StaffAppointmentsPage() {
           message: err?.message ?? "Failed to save member details.",
           severity: "error",
         });
+      },
+    });
+  };
+
+  const handleOpenMembersDialog = async () => {
+    if (!selected) return;
+    setLoadingMembers(true);
+    await getAppointmentMembers(selected.id, {
+      onSuccess: (res) => {
+        setLoadingMembers(false);
+        if (res.data && res.data.length > 0) {
+          setMembers(res.data);
+        } else {
+          setMembers(
+            Array.from({ length: selected.memberCount || 1 }, (_, i) => ({
+              name: i === 0 ? selected.customerName || "" : "",
+              age: 0,
+              gender: "Male",
+              relationship: i === 0 ? "Self" : "Family Member",
+              additionalNotes: "",
+              uniqueNumber: `MEM-${Math.random()
+                .toString(36)
+                .substring(2, 10)
+                .toUpperCase()}`,
+              testName: "",
+            })),
+          );
+        }
+        setMemberDialogOpen(true);
+      },
+      onError: () => {
+        setLoadingMembers(false);
+        setMembers(
+          Array.from({ length: selected.memberCount || 1 }, (_, i) => ({
+            name: i === 0 ? selected.customerName || "" : "",
+            age: 0,
+            gender: "Male",
+            relationship: i === 0 ? "Self" : "Family Member",
+            additionalNotes: "",
+            uniqueNumber: `MEM-${Math.random()
+              .toString(36)
+              .substring(2, 10)
+              .toUpperCase()}`,
+            testName: "",
+          })),
+        );
+        setMemberDialogOpen(true);
       },
     });
   };
@@ -841,26 +948,15 @@ export default function StaffAppointmentsPage() {
                       <Button
                         variant="contained"
                         color="primary"
-                        startIcon={<AddIcon />}
-                        onClick={() => {
-                          setMembers(
-                            Array.from(
-                              { length: selected.memberCount || 1 },
-                              (_, i) => ({
-                                name: "",
-                                age: 0,
-                                gender: "Other",
-                                relationship:
-                                  i === 0 ? "Self" : "Family Member",
-                                additionalNotes: "",
-                                uniqueNumber: `MEM-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
-                                testName: "Routine Blood Test",
-                              }),
-                            ),
-                          );
-                          setMemberDialogOpen(true);
-                        }}
-                        disabled={actionLoading}
+                        startIcon={
+                          loadingMembers ? (
+                            <CircularProgress size={16} color="inherit" />
+                          ) : (
+                            <AddIcon />
+                          )
+                        }
+                        onClick={handleOpenMembersDialog}
+                        disabled={actionLoading || loadingMembers}
                         sx={{
                           fontWeight: 700,
                           px: 3,
@@ -868,7 +964,9 @@ export default function StaffAppointmentsPage() {
                           borderRadius: "8px",
                         }}
                       >
-                        Add Test & Member Details
+                        {loadingMembers
+                          ? "Loading Members..."
+                          : "Add Test & Member Details"}
                       </Button>
                     )}
 
@@ -991,15 +1089,17 @@ export default function StaffAppointmentsPage() {
             <Typography variant="h6" sx={{ fontWeight: 800 }}>
               Test & Member Details
             </Typography>
-            <Button
-              variant="outlined"
-              size="small"
-              startIcon={<AddIcon />}
-              onClick={addEmptyMember}
-              sx={{ textTransform: "none", fontWeight: 700 }}
-            >
-              Add Test Taker
-            </Button>
+            {members.length < (selected?.memberCount || 1) && (
+              <Button
+                variant="outlined"
+                size="small"
+                startIcon={<AddIcon />}
+                onClick={addEmptyMember}
+                sx={{ textTransform: "none", fontWeight: 700 }}
+              >
+                Add Test Taker
+              </Button>
+            )}
           </DialogTitle>
           <DialogContent dividers sx={{ bgcolor: "rgba(0,0,0,0.01)" }}>
             {members.map((m, idx) => (
@@ -1111,16 +1211,89 @@ export default function StaffAppointmentsPage() {
                     </Grid>
 
                     <Grid size={{ xs: 12, sm: 6 }}>
-                      <TextField
-                        label="Test / Package Name"
-                        fullWidth
-                        size="small"
-                        value={m.testName || ""}
-                        onChange={(e) =>
-                          updateMember(idx, "testName", e.target.value)
-                        }
-                        placeholder="e.g. Routine Blood Test"
-                      />
+                      {selected &&
+                      getBookedItemOptions(selected.locationAddress).length >
+                        0 ? (
+                        <Box
+                          sx={{
+                            p: 1,
+                            border: "1px solid",
+                            borderColor: "divider",
+                            borderRadius: "4px",
+                          }}
+                        >
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ fontWeight: 700, mb: 0.5, display: "block" }}
+                          >
+                            Perform Booked Test/Package *
+                          </Typography>
+                          <Box
+                            sx={{
+                              display: "flex",
+                              flexDirection: "column",
+                              gap: 0.5,
+                            }}
+                          >
+                            {getBookedItemOptions(selected.locationAddress).map(
+                              (opt) => {
+                                const selectedTests = (m.testName || "")
+                                  .split(",")
+                                  .map((x) => x.trim())
+                                  .filter(Boolean);
+                                const isChecked = selectedTests.includes(opt);
+                                return (
+                                  <FormControlLabel
+                                    key={opt}
+                                    sx={{ margin: 0 }}
+                                    control={
+                                      <Checkbox
+                                        size="small"
+                                        checked={isChecked}
+                                        onChange={(e) => {
+                                          let newTests;
+                                          if (e.target.checked) {
+                                            newTests = [...selectedTests, opt];
+                                          } else {
+                                            newTests = selectedTests.filter(
+                                              (t) => t !== opt,
+                                            );
+                                          }
+                                          updateMember(
+                                            idx,
+                                            "testName",
+                                            newTests.join(", "),
+                                          );
+                                        }}
+                                      />
+                                    }
+                                    label={
+                                      <Typography
+                                        variant="body2"
+                                        sx={{ fontSize: "0.85rem" }}
+                                      >
+                                        {opt}
+                                      </Typography>
+                                    }
+                                  />
+                                );
+                              },
+                            )}
+                          </Box>
+                        </Box>
+                      ) : (
+                        <TextField
+                          label="Test / Package Name"
+                          fullWidth
+                          size="small"
+                          value={m.testName || ""}
+                          onChange={(e) =>
+                            updateMember(idx, "testName", e.target.value)
+                          }
+                          placeholder="e.g. Routine Blood Test"
+                        />
+                      )}
                     </Grid>
 
                     <Grid size={{ xs: 12, sm: 6 }}>
