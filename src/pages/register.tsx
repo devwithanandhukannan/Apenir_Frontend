@@ -26,6 +26,7 @@ import RoomIcon from "@mui/icons-material/Room";
 import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { MapLocationPicker } from "@/component_library/MapLocationPicker";
 
 // Weekdays mapping to DayText enum values: Mon = 1, Tue = 2, Wed = 3, Thu = 4, Fri = 5, Sat = 6, Sun = 7
 const DAYS = [
@@ -442,6 +443,23 @@ export default function Register() {
                 </Box>
                 <Grid container spacing={2}>
                   <Grid size={{ xs: 12 }}>
+                    <MapLocationPicker
+                      value={{
+                        lat: Number(latitude) || 0,
+                        lng: Number(longitude) || 0,
+                      }}
+                      onChange={(loc) => {
+                        setLatitude(String(loc.lat));
+                        setLongitude(String(loc.lng));
+                        if (loc.city) setCity(loc.city);
+                        if (loc.district) setDistrict(loc.district);
+                        if (loc.pincode) setPincode(loc.pincode);
+                      }}
+                      height={280}
+                      label="Pick Branch Location on Map"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12 }}>
                     <TextField
                       label="City"
                       value={city}
@@ -477,23 +495,23 @@ export default function Register() {
                   <Grid size={{ xs: 6 }}>
                     <TextField
                       label="Latitude"
-                      type="number"
                       value={latitude}
-                      onChange={(e) => setLatitude(e.target.value)}
                       fullWidth
                       required
+                      disabled
                       size="small"
+                      helperText="Select from map"
                     />
                   </Grid>
                   <Grid size={{ xs: 6 }}>
                     <TextField
                       label="Longitude"
-                      type="number"
                       value={longitude}
-                      onChange={(e) => setLongitude(e.target.value)}
                       fullWidth
                       required
+                      disabled
                       size="small"
+                      helperText="Select from map"
                     />
                   </Grid>
                 </Grid>

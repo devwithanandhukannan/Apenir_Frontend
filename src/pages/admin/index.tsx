@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import { useAppSelector } from "@/core_components/store/hooks";
+import { useApi } from "@/core_components/hooks/useApi/useApi";
 import {
   getDashboardMetrics,
   getVolumeTrends,
@@ -15,6 +17,7 @@ import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
 import Avatar from "@mui/material/Avatar";
 import Divider from "@mui/material/Divider";
+import CircularProgress from "@mui/material/CircularProgress";
 
 // Icon imports
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
@@ -28,10 +31,78 @@ import AccessTimeIcon from "@mui/icons-material/AccessTime";
 import ErrorIcon from "@mui/icons-material/Error";
 
 export default function AdminDashboard() {
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, isAuthenticated, isInitialized } = useAppSelector(
+    (state) => state.auth,
+  );
+  const router = useRouter();
+  const { get } = useApi();
+
+  const [realMetrics, setRealMetrics] = useState<{
+    totalSamples: number;
+    dailyRevenue: number;
+    pendingReports: number;
+    criticalAlerts: number;
+  } | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  // Auth Guard
+  useEffect(() => {
+    if (isInitialized && (!isAuthenticated || user?.role !== "admin")) {
+      router.replace("/admin/login");
+    }
+  }, [isAuthenticated, user, isInitialized, router]);
+
+  const loadMetrics = useCallback(async () => {
+    setLoading(true);
+    const response = await get<any>({
+      endpoint: "/api/admin/executive-overview",
+      requireAuth: true,
+    });
+    if (response.success && response.data?.success && response.data?.data) {
+      setRealMetrics(response.data.data);
+    }
+    setLoading(false);
+  }, [get]);
+
+  useEffect(() => {
+    if (isAuthenticated && user?.role === "admin") {
+      loadMetrics();
+    }
+  }, [isAuthenticated, user, loadMetrics]);
 
   // Consuming data from core/services/mockDataService
-  const metrics = getDashboardMetrics();
+  const metrics = [
+    {
+      title: "TOTAL SAMPLES",
+      value: loading
+        ? "..."
+        : (realMetrics?.totalSamples ?? 0).toLocaleString(),
+      trend: "+12.5%",
+      trendLabel: "from last week",
+      trendType: "positive",
+    },
+    {
+      title: "DAILY REVENUE",
+      value: loading
+        ? "..."
+        : `₹${(realMetrics?.dailyRevenue ?? 0).toLocaleString("en-IN")}`,
+      trend: "+8.2%",
+      trendLabel: "vs yesterday",
+      trendType: "positive",
+    },
+    {
+      title: "PENDING REPORTS",
+      value: loading ? "..." : `${realMetrics?.pendingReports ?? 0} Pending`,
+      trend: "Avg 2.4 hrs turn-around",
+      trendType: "neutral",
+    },
+    {
+      title: "CRITICAL ALERTS",
+      value: loading ? "..." : `${realMetrics?.criticalAlerts ?? 0} Alerts`,
+      trend: "Requires attention",
+      trendType: "critical",
+    },
+  ];
   const trends = getVolumeTrends();
   const feedItems = getCriticalFeed();
 

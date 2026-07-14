@@ -69,9 +69,18 @@ function formatTime(t: string | null) {
 }
 
 export default function StaffDashboard() {
-  const { user } = useAppSelector((state) => state.auth);
+  const { user, isAuthenticated, isInitialized } = useAppSelector(
+    (state) => state.auth,
+  );
   const { getMyAppointments } = useStaffService();
   const router = useRouter();
+
+  // Auth Guard
+  useEffect(() => {
+    if (isInitialized && (!isAuthenticated || user?.role !== "staff")) {
+      router.replace("/staff/login");
+    }
+  }, [isAuthenticated, user, isInitialized, router]);
 
   const [appointments, setAppointments] = useState<StaffAppointmentItem[]>([]);
   const [loading, setLoading] = useState(true);

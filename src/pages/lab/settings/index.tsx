@@ -31,6 +31,7 @@ import DialogActions from "@mui/material/DialogActions";
 import Stack from "@mui/material/Stack";
 import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { MapLocationPicker } from "@/component_library/MapLocationPicker";
 
 // Days mapping: Mon = 1 to Sun = 7
 const DAYS = [
@@ -418,6 +419,23 @@ export default function LabSettings() {
                       size="small"
                     />
                   </Grid>
+                  <Grid size={{ xs: 12 }}>
+                    <MapLocationPicker
+                      value={{
+                        lat: Number(latitude) || 0,
+                        lng: Number(longitude) || 0,
+                      }}
+                      onChange={(loc) => {
+                        setLatitude(String(loc.lat));
+                        setLongitude(String(loc.lng));
+                        if (loc.city) setCity(loc.city);
+                        if (loc.district) setDistrict(loc.district);
+                        if (loc.pincode) setPincode(loc.pincode);
+                      }}
+                      height={300}
+                      label="Find and Pick Branch Location on Map"
+                    />
+                  </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       label="City"
@@ -452,20 +470,22 @@ export default function LabSettings() {
                     <TextField
                       label="Latitude"
                       value={latitude}
-                      onChange={(e) => setLatitude(e.target.value)}
                       fullWidth
                       required
+                      disabled
                       size="small"
+                      helperText="Please select location on map"
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>
                     <TextField
                       label="Longitude"
                       value={longitude}
-                      onChange={(e) => setLongitude(e.target.value)}
                       fullWidth
                       required
+                      disabled
                       size="small"
+                      helperText="Please select location on map"
                     />
                   </Grid>
                   <Grid size={{ xs: 12, sm: 4 }}>

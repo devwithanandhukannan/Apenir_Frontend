@@ -31,6 +31,7 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DirectionsBikeIcon from "@mui/icons-material/DirectionsBike";
 import KeyIcon from "@mui/icons-material/Key";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import { useAppSelector } from "@/core_components/store/hooks";
 import {
   useStaffService,
   StaffAppointmentItem,
@@ -88,6 +89,17 @@ const COLLECTION_STEPS = [
 export default function StaffAppointmentsPage() {
   const router = useRouter();
   const { id: queryId } = router.query;
+  const { user, isAuthenticated, isInitialized } = useAppSelector(
+    (state) => state.auth,
+  );
+
+  // Auth Guard
+  useEffect(() => {
+    if (isInitialized && (!isAuthenticated || user?.role !== "staff")) {
+      router.replace("/staff/login");
+    }
+  }, [isAuthenticated, user, isInitialized, router]);
+
   const {
     getMyAppointments,
     updateAppointmentStatus,

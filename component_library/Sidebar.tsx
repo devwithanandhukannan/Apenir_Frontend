@@ -30,6 +30,7 @@ import KeyboardDoubleArrowLeftIcon from "@mui/icons-material/KeyboardDoubleArrow
 import EventNoteIcon from "@mui/icons-material/EventNote";
 import BatchPredictionIcon from "@mui/icons-material/BatchPrediction";
 import InsightsIcon from "@mui/icons-material/Insights";
+import AssignmentIcon from "@mui/icons-material/Assignment";
 import HomeIcon from "@mui/icons-material/Home";
 
 const DRAWER_WIDTH = 250;
@@ -173,6 +174,20 @@ export const Sidebar: React.FC<SidebarProps> = ({
       text: "Insights",
       path: "/lab/insights",
       icon: <InsightsIcon fontSize="small" />,
+    },
+  ];
+
+  // Define staff navigation list
+  const staffMenuItems = [
+    {
+      text: "Dashboard",
+      path: "/staff",
+      icon: <DashboardIcon fontSize="small" />,
+    },
+    {
+      text: "My Appointments",
+      path: "/staff/appointments",
+      icon: <AssignmentIcon fontSize="small" />,
     },
   ];
 
@@ -350,6 +365,80 @@ export const Sidebar: React.FC<SidebarProps> = ({
           ) : isAuthenticated && user && user.role === "lab" ? (
             <List component="nav" sx={{ p: 0 }}>
               {labMenuItems.map((item) => {
+                const active = isActive(item.path);
+                const buttonContent = (
+                  <ListItemButton
+                    selected={active}
+                    onClick={() => handleNavigate(item.path)}
+                    sx={{
+                      borderRadius: "8px",
+                      mb: 0.5,
+                      py: 1,
+                      px: isCollapsed ? 0 : 2,
+                      justifyContent: isCollapsed ? "center" : "flex-start",
+                      color: active ? "secondary.main" : "text.secondary",
+                      bgcolor: active
+                        ? theme.palette.mode === "light"
+                          ? "rgba(16, 185, 129, 0.08)"
+                          : "rgba(16, 185, 129, 0.15)"
+                        : "transparent",
+                      "&.Mui-selected": {
+                        bgcolor:
+                          theme.palette.mode === "light"
+                            ? "rgba(16, 185, 129, 0.08)"
+                            : "rgba(16, 185, 129, 0.15)",
+                        color: "secondary.main",
+                        "& .MuiListItemIcon-root": { color: "secondary.main" },
+                      },
+                      "&:hover": {
+                        bgcolor: active
+                          ? theme.palette.mode === "light"
+                            ? "rgba(16, 185, 129, 0.12)"
+                            : "rgba(16, 185, 129, 0.22)"
+                          : theme.palette.mode === "light"
+                            ? "rgba(0, 0, 0, 0.04)"
+                            : "rgba(255, 255, 255, 0.04)",
+                      },
+                    }}
+                  >
+                    <ListItemIcon
+                      sx={{
+                        minWidth: isCollapsed ? 0 : 32,
+                        justifyContent: "center",
+                        color: active ? "secondary.main" : "text.secondary",
+                      }}
+                    >
+                      {item.icon}
+                    </ListItemIcon>
+                    {!isCollapsed && (
+                      <ListItemText
+                        primary={
+                          <Typography
+                            variant="body2"
+                            sx={{ fontWeight: active ? 700 : 500 }}
+                          >
+                            {item.text}
+                          </Typography>
+                        }
+                      />
+                    )}
+                  </ListItemButton>
+                );
+
+                return isCollapsed ? (
+                  <Tooltip key={item.text} title={item.text} placement="right">
+                    <Box>{buttonContent}</Box>
+                  </Tooltip>
+                ) : (
+                  <React.Fragment key={item.text}>
+                    {buttonContent}
+                  </React.Fragment>
+                );
+              })}
+            </List>
+          ) : isAuthenticated && user && user.role === "staff" ? (
+            <List component="nav" sx={{ p: 0 }}>
+              {staffMenuItems.map((item) => {
                 const active = isActive(item.path);
                 const buttonContent = (
                   <ListItemButton

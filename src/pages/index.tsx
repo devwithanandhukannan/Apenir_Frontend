@@ -16,6 +16,7 @@ import Alert from "@mui/material/Alert";
 import AdminPanelSettingsIcon from "@mui/icons-material/AdminPanelSettings";
 import ScienceIcon from "@mui/icons-material/Science";
 import PersonIcon from "@mui/icons-material/Person";
+import PeopleIcon from "@mui/icons-material/People";
 import SecurityIcon from "@mui/icons-material/Security";
 import KeyboardArrowRightIcon from "@mui/icons-material/KeyboardArrowRight";
 import LockOpenIcon from "@mui/icons-material/LockOpen";
@@ -25,12 +26,12 @@ export default function Home() {
   const dispatch = useAppDispatch();
   const { user, isAuthenticated } = useAppSelector((state) => state.auth);
 
-  const simulateLogin = (role: "admin" | "lab" | "customer") => {
+  const simulateLogin = (role: "admin" | "lab" | "staff" | "customer") => {
     const mockUser = {
       id: `usr_${role}_001`,
       name: `${role.charAt(0).toUpperCase() + role.slice(1)} Tester`,
       email: `${role}@appenir.com`,
-      role,
+      role: role as any,
     };
     dispatch(loginSuccess({ user: mockUser, token: "mock_jwt_token_xyz" }));
   };
@@ -232,7 +233,20 @@ export default function Home() {
                         startIcon={<ScienceIcon />}
                         sx={{ py: 1.2 }}
                       >
-                        Lab & Staff Partner Login
+                        Lab Partner Login
+                      </Button>
+
+                      <Button
+                        variant="contained"
+                        onClick={() => router.push("/staff/login")}
+                        startIcon={<PeopleIcon />}
+                        sx={{
+                          py: 1.2,
+                          bgcolor: "#7c3aed",
+                          "&:hover": { bgcolor: "#6d28d9" },
+                        }}
+                      >
+                        Staff Phlebotomist Login
                       </Button>
 
                       <Button
@@ -242,7 +256,7 @@ export default function Home() {
                         startIcon={<AdminPanelSettingsIcon />}
                         sx={{ py: 1.2 }}
                       >
-                        Admin console Login
+                        Admin Console Login
                       </Button>
                     </Box>
 
@@ -279,6 +293,15 @@ export default function Home() {
                         sx={{ py: 1 }}
                       >
                         Simulate Lab Specialist
+                      </Button>
+
+                      <Button
+                        variant="outlined"
+                        onClick={() => simulateLogin("staff")}
+                        startIcon={<PeopleIcon />}
+                        sx={{ py: 1, color: "#7c3aed", borderColor: "#7c3aed" }}
+                      >
+                        Simulate Staff Member
                       </Button>
 
                       <Button
