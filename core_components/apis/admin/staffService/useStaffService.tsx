@@ -83,6 +83,42 @@ export interface AppointmentMemberInput {
   gender: string;
   relationship?: string;
   additionalNotes?: string;
+  uniqueNumber?: string;
+  testName?: string;
+}
+
+export interface RegisterProfileInput {
+  name: string;
+  phone?: string;
+  email?: string;
+  dob?: string;
+  age?: number;
+  gender: string;
+  address?: string;
+  district?: string;
+}
+
+export interface StaffHistoryItem {
+  id: string;
+  appointmentNumber: string;
+  customerName: string;
+  slotDate: string | null;
+  status: string;
+  memberCount: number;
+}
+
+export interface StaffStats {
+  todayCount: number;
+  weeklyCount: number;
+  pendingCount: number;
+  previousHistory: StaffHistoryItem[];
+}
+
+export interface StaffStatsResponse {
+  success: boolean;
+  message: string;
+  data: StaffStats;
+  errors: string[];
 }
 
 export function useStaffService() {
@@ -151,11 +187,17 @@ export function useStaffService() {
     [get],
   );
 
-  // Update appointment status (coming | reached | reachedlab)
+  // Update appointment status (coming | reached | taketest | collect | handover | reachedlab)
   const updateAppointmentStatus = useCallback(
     async (
       appointmentId: string,
-      status: "coming" | "reached" | "reachedlab",
+      status:
+        | "coming"
+        | "reached"
+        | "taketest"
+        | "collect"
+        | "handover"
+        | "reachedlab",
       options?: Omit<
         MutationRequestOptions<any, any>,
         "endpoint" | "body" | "requireAuth"
@@ -253,12 +295,79 @@ export function useStaffService() {
     [post],
   );
 
+  // Register a new customer profile on-the-spot
+  const registerMemberProfile = useCallback(
+    async (
+      appointmentId: string,
+      payload: RegisterProfileInput,
+      options?: Omit<
+        MutationRequestOptions<any, RegisterProfileInput>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, RegisterProfileInput>({
+        endpoint: `/api/staff/appointments/${appointmentId}/register-member-profile`,
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
+  // Get phlebotomist daily/weekly statistics and history
+  const getStaffStats = useCallback(
+    async (
+      options?: Omit<
+        BaseRequestOptions<StaffStatsResponse>,
+        "endpoint" | "requireAuth"
+      >,
+    ) => {
+      const response = await get<StaffStatsResponse>({
+        endpoint: "/api/staff/stats",
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
   return {
     getStaff,
     getMyAppointments,
     updateAppointmentStatus,
     verifyOtp,
     addAppointmentMembers,
+    registerMemberProfile,
+    getStaffStats,
   };
 }
 

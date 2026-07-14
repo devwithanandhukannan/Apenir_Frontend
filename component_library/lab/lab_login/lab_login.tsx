@@ -16,6 +16,7 @@ import VisibilityOff from "@mui/icons-material/VisibilityOff";
 import EmailIcon from "@mui/icons-material/Email";
 import LockOutlinedIcon from "@mui/icons-material/LockOutlined";
 import ScienceIcon from "@mui/icons-material/Science";
+import DirectionsBikeIcon from "@mui/icons-material/DirectionsBike";
 import Dialog from "@mui/material/Dialog";
 import DialogTitle from "@mui/material/DialogTitle";
 import DialogContent from "@mui/material/DialogContent";
@@ -44,6 +45,8 @@ export const LabLogin: React.FC = () => {
     handleSendReset,
     router,
   } = useLabLogin();
+
+  const isStaffLogin = router.pathname.includes("/staff/login");
 
   return (
     <Grid container sx={{ minHeight: "100vh", bgcolor: "background.default" }}>
@@ -220,13 +223,19 @@ export const LabLogin: React.FC = () => {
           <Box sx={{ mb: 4, display: "flex", alignItems: "center", gap: 1.5 }}>
             <Avatar
               sx={{
-                bgcolor: "#00897b",
+                bgcolor: isStaffLogin ? "#0284c7" : "#00897b",
                 width: 48,
                 height: 48,
-                boxShadow: "0 4px 14px rgba(0,137,123,0.35)",
+                boxShadow: isStaffLogin
+                  ? "0 4px 14px rgba(2,132,199,0.35)"
+                  : "0 4px 14px rgba(0,137,123,0.35)",
               }}
             >
-              <ScienceIcon sx={{ fontSize: 26 }} />
+              {isStaffLogin ? (
+                <DirectionsBikeIcon sx={{ fontSize: 26 }} />
+              ) : (
+                <ScienceIcon sx={{ fontSize: 26 }} />
+              )}
             </Avatar>
             <Box>
               <Typography
@@ -237,14 +246,18 @@ export const LabLogin: React.FC = () => {
                   lineHeight: 1.1,
                 }}
               >
-                Appenir<span style={{ color: "#00897b" }}> Lab</span>
+                Appenir
+                <span style={{ color: isStaffLogin ? "#0284c7" : "#00897b" }}>
+                  {" "}
+                  {isStaffLogin ? "Staff" : "Lab"}
+                </span>
               </Typography>
               <Typography
                 variant="caption"
                 color="text.secondary"
                 sx={{ fontWeight: 600, letterSpacing: "1.5px" }}
               >
-                LAB CONSOLE
+                {isStaffLogin ? "STAFF PORTAL" : "LAB CONSOLE"}
               </Typography>
             </Box>
           </Box>
@@ -258,8 +271,9 @@ export const LabLogin: React.FC = () => {
               Welcome back!
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Sign in to your lab account to manage tests, samples, and
-              diagnostics reports.
+              {isStaffLogin
+                ? "Sign in to your staff account to view assignments, navigate routes, and collect samples."
+                : "Sign in to your lab account to manage tests, samples, and diagnostics reports."}
             </Typography>
           </Box>
 
@@ -281,7 +295,7 @@ export const LabLogin: React.FC = () => {
               required
               fullWidth
               id="lab-login-email"
-              label="Lab Email Address"
+              label={isStaffLogin ? "Staff Email Address" : "Lab Email Address"}
               name="email"
               autoComplete="email"
               autoFocus

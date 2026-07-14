@@ -32,6 +32,7 @@ import BatchPredictionIcon from "@mui/icons-material/BatchPrediction";
 import InsightsIcon from "@mui/icons-material/Insights";
 import AssignmentIcon from "@mui/icons-material/Assignment";
 import HomeIcon from "@mui/icons-material/Home";
+import CloudUploadIcon from "@mui/icons-material/CloudUpload";
 
 const DRAWER_WIDTH = 250;
 
@@ -149,6 +150,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       text: "Appointments",
       path: "/lab/appointments",
       icon: <EventNoteIcon fontSize="small" />,
+    },
+    {
+      text: "Upload Reports",
+      path: "/lab/upload-report",
+      icon: <CloudUploadIcon fontSize="small" />,
     },
     {
       text: "Staff",

@@ -31,12 +31,20 @@ import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import DirectionsBikeIcon from "@mui/icons-material/DirectionsBike";
 import KeyIcon from "@mui/icons-material/Key";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
+import AddIcon from "@mui/icons-material/Add";
+import DeleteIcon from "@mui/icons-material/Delete";
+import dynamic from "next/dynamic";
 import { useAppSelector } from "@/core_components/store/hooks";
 import {
   useStaffService,
   StaffAppointmentItem,
   AppointmentMemberInput,
 } from "@/core_components/apis/admin/staffService/useStaffService";
+
+// Dynamic loading for react-leaflet to prevent SSR errors
+const LeafletMap = dynamic(() => import("@/component_library/LeafletMap"), {
+  ssr: false,
+});
 
 const STATUS_MAP: Record<
   number,
@@ -58,6 +66,11 @@ const STATUS_MAP: Record<
   4: { label: "Collected", color: "success" },
   5: { label: "Completed", color: "success" },
   6: { label: "Cancelled", color: "error" },
+  7: { label: "Coming", color: "info" },
+  8: { label: "Reached", color: "info" },
+  9: { label: "OTP Verified", color: "success" },
+  10: { label: "Taking Test", color: "secondary" },
+  11: { label: "Handover to Lab", color: "success" },
 };
 
 function formatDate(d: string | null) {
@@ -81,9 +94,10 @@ function formatTime(t: string | null) {
 
 const COLLECTION_STEPS = [
   "Mark Departed",
-  "Mark Arrived & Verify OTP",
-  "Add Member Details",
-  "Mark Reached Lab",
+  "Mark Arrived",
+  "Verify OTP",
+  "Add Members & Take Test",
+  "Handover to Lab",
 ];
 
 export default function StaffAppointmentsPage() {
@@ -105,6 +119,7 @@ export default function StaffAppointmentsPage() {
     updateAppointmentStatus,
     verifyOtp,
     addAppointmentMembers,
+    registerMemberProfile,
   } = useStaffService();
 
   const [appointments, setAppointments] = useState<StaffAppointmentItem[]>([]);
@@ -112,13 +127,17 @@ export default function StaffAppointmentsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Phlebotomist current GPS location
+  const [myLocation, setMyLocation] = useState<{
+    lat: number;
+    lng: number;
+  } | null>(null);
+
   // OTP dialog
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [otpInput, setOtpInput] = useState("");
   const [otpVerifying, setOtpVerifying] = useState(false);
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [otpVerifiedMemberCount, setOtpVerifiedMemberCount] =
-    useState<number>(1);
 
   // Member details dialog
   const [memberDialogOpen, setMemberDialogOpen] = useState(false);
@@ -128,6 +147,22 @@ export default function StaffAppointmentsPage() {
   const [selectedProfiles, setSelectedProfiles] = useState<
     Record<number, string>
   >({});
+
+  // On-the-spot registration dialog
+  const [registerDialogOpen, setRegisterDialogOpen] = useState(false);
+  const [registerForm, setRegisterForm] = useState({
+    name: "",
+    phone: "",
+    email: "",
+    age: 0,
+    gender: "Male",
+    address: "",
+    district: "",
+  });
+  const [registerLoading, setRegisterLoading] = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [activeMemberIndexForRegister, setActiveMemberIndexForRegister] =
+    useState<number | null>(null);
 
   // Status action loading
   const [actionLoading, setActionLoading] = useState(false);
@@ -140,6 +175,28 @@ export default function StaffAppointmentsPage() {
     message: "",
     severity: "success",
   });
+
+  // Track phlebotomist position
+  useEffect(() => {
+    if (typeof window !== "undefined" && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          setMyLocation({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+        },
+        (err) => {
+          console.warn(
+            "Geolocation denied or unavailable, utilizing default center.",
+            err,
+          );
+          // Default center (Bangalore center)
+          setMyLocation({ lat: 12.9715987, lng: 77.5945627 });
+        },
+      );
+    }
+  }, []);
 
   const loadAppointments = useCallback(async () => {
     setLoading(true);
@@ -165,7 +222,7 @@ export default function StaffAppointmentsPage() {
     loadAppointments();
   }, [loadAppointments]);
 
-  // If a queryId is present from the router, auto-select that appointment
+  // Handle selected appointment changes
   useEffect(() => {
     if (queryId && appointments.length > 0) {
       const found = appointments.find((a) => a.id === queryId);
@@ -174,7 +231,8 @@ export default function StaffAppointmentsPage() {
   }, [queryId, appointments]);
 
   const handleStatusUpdate = async (
-    status: "coming" | "reached" | "reachedlab",
+    status:
+      "coming" | "reached" | "taketest" | "collect" | "handover" | "reachedlab",
   ) => {
     if (!selected) return;
     setActionLoading(true);
@@ -182,13 +240,13 @@ export default function StaffAppointmentsPage() {
       onSuccess: () => {
         setSnackbar({
           open: true,
-          message: "Status updated & customer notified via WhatsApp.",
+          message: `Status transitioned to ${status.toUpperCase()} and patient notified.`,
           severity: "success",
         });
         loadAppointments();
         setActionLoading(false);
 
-        // After "reached" — open OTP dialog
+        // Auto-triggers
         if (status === "reached") {
           setOtpDialogOpen(true);
         }
@@ -212,14 +270,18 @@ export default function StaffAppointmentsPage() {
       onSuccess: (data) => {
         setOtpVerifying(false);
         setOtpDialogOpen(false);
-        const count = data.data?.memberCount ?? selected.memberCount ?? 1;
-        setOtpVerifiedMemberCount(count);
+        setSnackbar({
+          open: true,
+          message: "OTP Verified successfully.",
+          severity: "success",
+        });
 
+        const count = data.data?.memberCount ?? selected.memberCount ?? 1;
         const profiles = data.data?.existingProfiles ?? [];
         setExistingProfiles(profiles);
         setSelectedProfiles({});
 
-        // Initialize member forms
+        // Initialize member list
         setMembers(
           Array.from({ length: count }, (_, i) => ({
             name: "",
@@ -227,6 +289,8 @@ export default function StaffAppointmentsPage() {
             gender: "Other",
             relationship: i === 0 ? "Self" : "Family Member",
             additionalNotes: "",
+            uniqueNumber: `MEM-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+            testName: "Routine Blood Test",
           })),
         );
         setMemberDialogOpen(true);
@@ -234,24 +298,25 @@ export default function StaffAppointmentsPage() {
       },
       onError: (err) => {
         setOtpVerifying(false);
-        setOtpError(err?.message ?? "Invalid passcode. Please try again.");
+        setOtpError(err?.message ?? "Invalid OTP code. Please try again.");
       },
     });
   };
 
   const handleSaveMembers = async () => {
     if (!selected) return;
-    // Validate
-    for (const m of members) {
-      if (!m.name.trim()) {
+    // Validate rows
+    for (let i = 0; i < members.length; i++) {
+      if (!members[i].name.trim()) {
         setSnackbar({
           open: true,
-          message: "All member names are required.",
+          message: `Member ${i + 1} requires a valid name.`,
           severity: "error",
         });
         return;
       }
     }
+
     setMemberSaving(true);
     await addAppointmentMembers(selected.id, members, {
       onSuccess: () => {
@@ -259,21 +324,92 @@ export default function StaffAppointmentsPage() {
         setMemberDialogOpen(false);
         setSnackbar({
           open: true,
-          message:
-            "Member details saved. Mark 'Reached Lab' when samples are delivered.",
+          message: "Members details logged. Let's start the diagnostic tests.",
           severity: "success",
         });
-        loadAppointments();
+
+        // Auto-transition to TakingTest status
+        handleStatusUpdate("taketest");
       },
       onError: (err) => {
         setMemberSaving(false);
         setSnackbar({
           open: true,
-          message: err?.message ?? "Failed to save members.",
+          message: err?.message ?? "Failed to save member details.",
           severity: "error",
         });
       },
     });
+  };
+
+  // On-site customer registration
+  const handleRegisterOnSite = async () => {
+    if (!selected || activeMemberIndexForRegister === null) return;
+    if (!registerForm.name.trim()) {
+      setRegisterError("Customer name is required.");
+      return;
+    }
+    setRegisterLoading(true);
+    setRegisterError(null);
+
+    await registerMemberProfile(
+      selected.id,
+      {
+        name: registerForm.name.trim(),
+        phone: registerForm.phone.trim() || undefined,
+        email: registerForm.email.trim() || undefined,
+        gender: registerForm.gender,
+        age: registerForm.age,
+        address: registerForm.address.trim() || undefined,
+        district: registerForm.district.trim() || undefined,
+      },
+      {
+        onSuccess: (data) => {
+          setRegisterLoading(false);
+          setRegisterDialogOpen(false);
+          setSnackbar({
+            open: true,
+            message: `Customer ${registerForm.name} registered on-the-spot.`,
+            severity: "success",
+          });
+
+          // Append profile to dropdown values
+          const newProfile = data.data?.data;
+          if (newProfile) {
+            setExistingProfiles((prev) => [...prev, newProfile]);
+
+            // Select it for the active test-taker row
+            const idx = activeMemberIndexForRegister;
+            setSelectedProfiles((prev) => ({ ...prev, [idx]: newProfile.id }));
+            setMembers((prev) => {
+              const next = [...prev];
+              next[idx] = {
+                ...next[idx],
+                name: newProfile.name || "",
+                gender: newProfile.gender || "Other",
+                age: registerForm.age,
+              };
+              return next;
+            });
+          }
+
+          // Reset form
+          setRegisterForm({
+            name: "",
+            phone: "",
+            email: "",
+            age: 0,
+            gender: "Male",
+            address: "",
+            district: "",
+          });
+        },
+        onError: (err) => {
+          setRegisterLoading(false);
+          setRegisterError(err?.message ?? "Registration failed. Try again.");
+        },
+      },
+    );
   };
 
   const updateMember = (
@@ -288,19 +424,35 @@ export default function StaffAppointmentsPage() {
     });
   };
 
+  const addEmptyMember = () => {
+    setMembers((prev) => [
+      ...prev,
+      {
+        name: "",
+        age: 0,
+        gender: "Other",
+        relationship: "Family Member",
+        additionalNotes: "",
+        uniqueNumber: `MEM-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+        testName: "Routine Blood Test",
+      },
+    ]);
+  };
+
+  const removeMemberRow = (idx: number) => {
+    if (members.length <= 1) return;
+    setMembers((prev) => prev.filter((_, i) => i !== idx));
+  };
+
   const handleProfileChange = (i: number, value: string) => {
     if (value === "new") {
-      setSelectedProfiles((prev) => ({ ...prev, [i]: "new" }));
-      setMembers((prev) => {
-        const next = [...prev];
-        next[i] = {
-          ...next[i],
-          name: "",
-          age: 0,
-          gender: "Other",
-        };
-        return next;
-      });
+      setActiveMemberIndexForRegister(i);
+      setRegisterForm((prev) => ({
+        ...prev,
+        phone: selected?.customerPhone || "",
+        address: selected?.locationAddress || "",
+      }));
+      setRegisterDialogOpen(true);
       return;
     }
 
@@ -351,23 +503,25 @@ export default function StaffAppointmentsPage() {
     );
   }
 
-  // If an appointment is selected, show its detail view
+  // Selected visit details view
   if (selected) {
     const statusInfo = STATUS_MAP[selected.status] ?? {
       label: "Unknown",
       color: "default",
     };
-    const isCollected = selected.status >= 4;
 
-    // Determine step based on status
-    const activeStep =
-      selected.status === 1 || selected.status === 2
-        ? 0
-        : selected.status === 3
-          ? 1
-          : selected.status === 4
-            ? 2
-            : 3;
+    // Sequential Active step tracker for Stepper UI
+    let activeStep = 0;
+    if (selected.status === 7) activeStep = 1; // Departed
+    if (selected.status === 8) activeStep = 2; // Arrived
+    if (selected.status === 9) activeStep = 3; // OTP Verified
+    if (selected.status === 10) activeStep = 3; // Taking Test
+    if (
+      selected.status === 4 ||
+      selected.status === 11 ||
+      selected.status === 5
+    )
+      activeStep = 5; // Collected / Handover
 
     return (
       <>
@@ -375,7 +529,8 @@ export default function StaffAppointmentsPage() {
           <title>{selected.appointmentNumber} – Staff Portal</title>
         </Head>
 
-        <Box>
+        <Box sx={{ pb: 6 }}>
+          {/* Header row */}
           <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 3 }}>
             <IconButton
               onClick={() => {
@@ -390,11 +545,34 @@ export default function StaffAppointmentsPage() {
               <ArrowBackIcon fontSize="small" />
             </IconButton>
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
-              Visit Details
+              Visit details
             </Typography>
           </Box>
 
-          {/* Collection Progress Stepper */}
+          {/* Map Section */}
+          {myLocation && (
+            <Card
+              elevation={0}
+              sx={{
+                border: "1px solid",
+                borderColor: "divider",
+                mb: 3,
+                overflow: "hidden",
+              }}
+            >
+              <Box sx={{ height: 320, width: "100%", position: "relative" }}>
+                <LeafletMap
+                  startLat={myLocation.lat}
+                  startLng={myLocation.lng}
+                  destLat={selected.locationLatitude}
+                  destLng={selected.locationLongitude}
+                  destAddress={selected.locationAddress}
+                />
+              </Box>
+            </Card>
+          )}
+
+          {/* Stepper progress */}
           <Card
             elevation={0}
             sx={{ border: "1px solid", borderColor: "divider", mb: 3 }}
@@ -406,8 +584,8 @@ export default function StaffAppointmentsPage() {
                     <StepLabel
                       sx={{
                         "& .MuiStepLabel-label": {
-                          fontSize: 11,
-                          fontWeight: 600,
+                          fontSize: 10,
+                          fontWeight: 700,
                         },
                       }}
                     >
@@ -420,7 +598,7 @@ export default function StaffAppointmentsPage() {
           </Card>
 
           <Grid container spacing={3}>
-            {/* Patient Info */}
+            {/* Details details */}
             <Grid size={{ xs: 12, md: 6 }}>
               <Card
                 elevation={0}
@@ -433,9 +611,9 @@ export default function StaffAppointmentsPage() {
                 <CardContent>
                   <Typography
                     variant="subtitle2"
-                    sx={{ fontWeight: 700, mb: 1.5 }}
+                    sx={{ fontWeight: 750, mb: 1.5 }}
                   >
-                    Patient Information
+                    Primary Booking Info
                   </Typography>
                   <Divider sx={{ mb: 1.5 }} />
                   <Box
@@ -443,60 +621,47 @@ export default function StaffAppointmentsPage() {
                   >
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Appointment #
+                        Reference Number
                       </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
                         {selected.appointmentNumber}
                       </Typography>
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Patient Name
+                        Patient / Customer
                       </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
                         {selected.customerName}
                       </Typography>
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Phone
+                        Contact phone
                       </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
                         {selected.customerPhone || "—"}
                       </Typography>
                     </Box>
                     <Box>
                       <Typography variant="caption" color="text.secondary">
-                        Members
+                        Current Visit Status
                       </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {selected.memberCount}
-                      </Typography>
-                    </Box>
-                    <Box
-                      sx={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: 1,
-                        mt: 0.5,
-                      }}
-                    >
-                      <Typography variant="caption" color="text.secondary">
-                        Status
-                      </Typography>
-                      <Chip
-                        label={statusInfo.label}
-                        color={statusInfo.color}
-                        size="small"
-                        sx={{ fontWeight: 600, fontSize: 11 }}
-                      />
+                      <Box sx={{ mt: 0.5 }}>
+                        <Chip
+                          label={statusInfo.label}
+                          color={statusInfo.color}
+                          size="small"
+                          sx={{ fontWeight: 700 }}
+                        />
+                      </Box>
                     </Box>
                   </Box>
                 </CardContent>
               </Card>
             </Grid>
 
-            {/* Location & Slot */}
+            {/* Address Details */}
             <Grid size={{ xs: 12, md: 6 }}>
               <Card
                 elevation={0}
@@ -509,9 +674,9 @@ export default function StaffAppointmentsPage() {
                 <CardContent>
                   <Typography
                     variant="subtitle2"
-                    sx={{ fontWeight: 700, mb: 1.5 }}
+                    sx={{ fontWeight: 750, mb: 1.5 }}
                   >
-                    Collection Details
+                    Schedule & Address
                   </Typography>
                   <Divider sx={{ mb: 1.5 }} />
                   <Box
@@ -527,13 +692,17 @@ export default function StaffAppointmentsPage() {
                           color="text.secondary"
                           sx={{ display: "block" }}
                         >
-                          Address
+                          Collection Address
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {selected.locationAddress}
                         </Typography>
                         {selected.landmark && (
-                          <Typography variant="caption" color="text.secondary">
+                          <Typography
+                            variant="caption"
+                            color="text.secondary"
+                            sx={{ display: "block" }}
+                          >
                             Landmark: {selected.landmark}
                           </Typography>
                         )}
@@ -543,15 +712,15 @@ export default function StaffAppointmentsPage() {
                             color="text.secondary"
                             sx={{ display: "block" }}
                           >
-                            Building: {selected.buildingDetails}
-                            {selected.floor ? `, Floor ${selected.floor}` : ""}
+                            Building: {selected.buildingDetails}{" "}
+                            {selected.floor ? `· Floor ${selected.floor}` : ""}
                           </Typography>
                         )}
                       </Box>
                     </Box>
                     <Box sx={{ display: "flex", gap: 1 }}>
                       <CalendarTodayIcon
-                        sx={{ fontSize: 15, color: "text.disabled", mt: 0.3 }}
+                        sx={{ fontSize: 15, color: "text.disabled", mt: 0.2 }}
                       />
                       <Box>
                         <Typography
@@ -559,7 +728,7 @@ export default function StaffAppointmentsPage() {
                           color="text.secondary"
                           sx={{ display: "block" }}
                         >
-                          Date
+                          Slot Date
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {formatDate(selected.slotDate)}
@@ -568,7 +737,7 @@ export default function StaffAppointmentsPage() {
                     </Box>
                     <Box sx={{ display: "flex", gap: 1 }}>
                       <AccessTimeIcon
-                        sx={{ fontSize: 15, color: "text.disabled", mt: 0.3 }}
+                        sx={{ fontSize: 15, color: "text.disabled", mt: 0.2 }}
                       />
                       <Box>
                         <Typography
@@ -576,106 +745,189 @@ export default function StaffAppointmentsPage() {
                           color="text.secondary"
                           sx={{ display: "block" }}
                         >
-                          Time Slot
+                          Slot Time
                         </Typography>
                         <Typography variant="body2" sx={{ fontWeight: 600 }}>
                           {formatTime(selected.slotStartTime)}
                         </Typography>
                       </Box>
                     </Box>
-                    <Box>
-                      <Typography
-                        variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block" }}
-                      >
-                        GPS Coordinates
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {selected.locationLatitude.toFixed(5)},{" "}
-                        {selected.locationLongitude.toFixed(5)}
-                      </Typography>
-                    </Box>
                   </Box>
                 </CardContent>
               </Card>
             </Grid>
 
-            {/* Action Buttons */}
-            {!isCollected && (
-              <Grid size={{ xs: 12 }}>
-                <Card
-                  elevation={0}
-                  sx={{ border: "1px solid", borderColor: "divider" }}
-                >
-                  <CardContent>
-                    <Typography
-                      variant="subtitle2"
-                      sx={{ fontWeight: 700, mb: 2 }}
-                    >
-                      Update Collection Status
-                    </Typography>
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5 }}>
+            {/* Sequential Action Controls */}
+            <Grid size={{ xs: 12 }}>
+              <Card
+                elevation={0}
+                sx={{ border: "1px solid", borderColor: "divider" }}
+              >
+                <CardContent>
+                  <Typography
+                    variant="subtitle2"
+                    sx={{ fontWeight: 750, mb: 2 }}
+                  >
+                    Sequential Action Pipeline
+                  </Typography>
+
+                  <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+                    {/* Step 1: Mark Departed */}
+                    {selected.status <= 3 && (
                       <Button
                         variant="contained"
                         startIcon={<DirectionsBikeIcon />}
                         onClick={() => handleStatusUpdate("coming")}
-                        disabled={actionLoading || selected.status >= 3}
-                        sx={{ fontWeight: 600 }}
+                        disabled={actionLoading}
+                        sx={{
+                          fontWeight: 700,
+                          px: 3,
+                          textTransform: "none",
+                          borderRadius: "8px",
+                        }}
                       >
                         {actionLoading ? (
-                          <CircularProgress size={18} color="inherit" />
+                          <CircularProgress size={16} color="inherit" />
                         ) : (
                           "Mark Departed"
                         )}
                       </Button>
+                    )}
+
+                    {/* Step 2: Mark Arrived */}
+                    {selected.status === 7 && (
                       <Button
                         variant="contained"
                         color="secondary"
                         startIcon={<LocationOnIcon />}
                         onClick={() => handleStatusUpdate("reached")}
                         disabled={actionLoading}
-                        sx={{ fontWeight: 600 }}
+                        sx={{
+                          fontWeight: 700,
+                          px: 3,
+                          textTransform: "none",
+                          borderRadius: "8px",
+                        }}
                       >
-                        Mark Arrived
+                        {actionLoading ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          "Mark Arrived"
+                        )}
                       </Button>
+                    )}
+
+                    {/* Step 3: Verify OTP */}
+                    {selected.status === 8 && (
                       <Button
-                        variant="outlined"
+                        variant="contained"
+                        color="warning"
                         startIcon={<KeyIcon />}
                         onClick={() => setOtpDialogOpen(true)}
                         disabled={actionLoading}
-                        sx={{ fontWeight: 600 }}
+                        sx={{
+                          fontWeight: 700,
+                          px: 3,
+                          textTransform: "none",
+                          borderRadius: "8px",
+                        }}
                       >
                         Verify Patient OTP
                       </Button>
+                    )}
+
+                    {/* Step 4: Add details / Edit member details */}
+                    {selected.status === 9 && (
                       <Button
-                        variant="outlined"
+                        variant="contained"
+                        color="primary"
+                        startIcon={<AddIcon />}
+                        onClick={() => {
+                          setMembers(
+                            Array.from(
+                              { length: selected.memberCount || 1 },
+                              (_, i) => ({
+                                name: "",
+                                age: 0,
+                                gender: "Other",
+                                relationship:
+                                  i === 0 ? "Self" : "Family Member",
+                                additionalNotes: "",
+                                uniqueNumber: `MEM-${Math.random().toString(36).substr(2, 9).toUpperCase()}`,
+                                testName: "Routine Blood Test",
+                              }),
+                            ),
+                          );
+                          setMemberDialogOpen(true);
+                        }}
+                        disabled={actionLoading}
+                        sx={{
+                          fontWeight: 700,
+                          px: 3,
+                          textTransform: "none",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        Add Test & Member Details
+                      </Button>
+                    )}
+
+                    {/* Step 5: Test in progress */}
+                    {selected.status === 10 && (
+                      <Button
+                        variant="contained"
                         color="success"
                         startIcon={<CheckCircleIcon />}
-                        onClick={() => handleStatusUpdate("reachedlab")}
+                        onClick={() => handleStatusUpdate("collect")}
                         disabled={actionLoading}
-                        sx={{ fontWeight: 600 }}
+                        sx={{
+                          fontWeight: 700,
+                          px: 3,
+                          textTransform: "none",
+                          borderRadius: "8px",
+                        }}
                       >
-                        Mark Reached Lab
+                        Complete Test & Collect Samples
                       </Button>
-                    </Box>
-                  </CardContent>
-                </Card>
-              </Grid>
-            )}
+                    )}
 
-            {isCollected && (
-              <Grid size={{ xs: 12 }}>
-                <Alert severity="success" icon={<CheckCircleIcon />}>
-                  This visit is completed. Samples have been collected and
-                  delivered to the lab.
-                </Alert>
-              </Grid>
-            )}
+                    {/* Step 6: Handover to lab */}
+                    {selected.status === 4 && (
+                      <Button
+                        variant="contained"
+                        color="success"
+                        startIcon={<CheckCircleIcon />}
+                        onClick={() => handleStatusUpdate("handover")}
+                        disabled={actionLoading}
+                        sx={{
+                          fontWeight: 700,
+                          px: 3,
+                          textTransform: "none",
+                          borderRadius: "8px",
+                        }}
+                      >
+                        Handover Samples to Lab
+                      </Button>
+                    )}
+
+                    {/* Step 7: Completed State */}
+                    {(selected.status === 11 || selected.status === 5) && (
+                      <Alert
+                        severity="success"
+                        sx={{ width: "100%", borderRadius: "8px" }}
+                      >
+                        Samples collected and handed over successfully. Awaiting
+                        test report upload by the Lab Owner.
+                      </Alert>
+                    )}
+                  </Box>
+                </CardContent>
+              </Card>
+            </Grid>
           </Grid>
         </Box>
 
-        {/* OTP Verification Dialog */}
+        {/* OTP Dialog */}
         <Dialog
           open={otpDialogOpen}
           onClose={() => {
@@ -686,16 +938,14 @@ export default function StaffAppointmentsPage() {
           maxWidth="xs"
           fullWidth
         >
-          <DialogTitle sx={{ fontWeight: 700, pb: 0.5 }}>
-            Verify Patient Passcode
-          </DialogTitle>
+          <DialogTitle sx={{ fontWeight: 800 }}>Verify Patient OTP</DialogTitle>
           <DialogContent>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Ask the patient for their 4-digit collection passcode to confirm
-              sample collection.
+              Please request the 4-digit collection verification OTP passcode
+              from the patient.
             </Typography>
             <TextField
-              label="4-digit Passcode"
+              label="4-Digit Passcode"
               fullWidth
               value={otpInput}
               onChange={(e) => setOtpInput(e.target.value.slice(0, 4))}
@@ -707,27 +957,17 @@ export default function StaffAppointmentsPage() {
             />
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button
-              onClick={() => {
-                setOtpDialogOpen(false);
-                setOtpInput("");
-                setOtpError(null);
-              }}
-              size="small"
-            >
-              Cancel
-            </Button>
+            <Button onClick={() => setOtpDialogOpen(false)}>Cancel</Button>
             <Button
               variant="contained"
               onClick={handleVerifyOtp}
               disabled={otpInput.length !== 4 || otpVerifying}
-              size="small"
-              sx={{ fontWeight: 600 }}
+              sx={{ fontWeight: 700 }}
             >
               {otpVerifying ? (
                 <CircularProgress size={16} color="inherit" />
               ) : (
-                "Verify"
+                "Verify OTP"
               )}
             </Button>
           </DialogActions>
@@ -737,143 +977,380 @@ export default function StaffAppointmentsPage() {
         <Dialog
           open={memberDialogOpen}
           onClose={() => setMemberDialogOpen(false)}
-          maxWidth="sm"
+          maxWidth="md"
           fullWidth
         >
-          <DialogTitle sx={{ fontWeight: 700, pb: 0.5 }}>
-            Member Details ({otpVerifiedMemberCount} member
-            {otpVerifiedMemberCount !== 1 ? "s" : ""})
-          </DialogTitle>
-          <DialogContent dividers>
-            <Typography
-              variant="caption"
-              color="text.secondary"
-              sx={{ mb: 2, display: "block" }}
-            >
-              OTP verified. Please fill in details for each patient being
-              collected.
+          <DialogTitle
+            sx={{
+              fontWeight: 800,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+            }}
+          >
+            <Typography variant="h6" sx={{ fontWeight: 800 }}>
+              Test & Member Details
             </Typography>
-            {members.map((m, i) => (
-              <Box key={i} sx={{ mb: 3 }}>
-                <Typography
-                  variant="subtitle2"
-                  sx={{ fontWeight: 700, mb: 1.5, color: "primary.main" }}
-                >
-                  Member {i + 1}
-                </Typography>
-                <Grid container spacing={1.5}>
-                  {existingProfiles.length > 0 && (
-                    <Grid size={{ xs: 12 }}>
+            <Button
+              variant="outlined"
+              size="small"
+              startIcon={<AddIcon />}
+              onClick={addEmptyMember}
+              sx={{ textTransform: "none", fontWeight: 700 }}
+            >
+              Add Test Taker
+            </Button>
+          </DialogTitle>
+          <DialogContent dividers sx={{ bgcolor: "rgba(0,0,0,0.01)" }}>
+            {members.map((m, idx) => (
+              <Card
+                key={idx}
+                sx={{
+                  mb: 3,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  boxShadow: "none",
+                }}
+              >
+                <CardContent sx={{ p: 2 }}>
+                  <Box
+                    sx={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      mb: 2,
+                    }}
+                  >
+                    <Typography
+                      variant="subtitle2"
+                      sx={{ fontWeight: 800, color: "primary.main" }}
+                    >
+                      Patient Row #{idx + 1}
+                    </Typography>
+                    {members.length > 1 && (
+                      <IconButton
+                        size="small"
+                        color="error"
+                        onClick={() => removeMemberRow(idx)}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+
+                  <Grid container spacing={2}>
+                    {existingProfiles.length > 0 && (
+                      <Grid size={{ xs: 12 }}>
+                        <TextField
+                          label="Link Registered Account Profile"
+                          fullWidth
+                          size="small"
+                          select
+                          value={selectedProfiles[idx] || "new"}
+                          onChange={(e) =>
+                            handleProfileChange(idx, e.target.value)
+                          }
+                        >
+                          <MenuItem value="new">
+                            -- Create / Register On-Site Profile --
+                          </MenuItem>
+                          {existingProfiles.map((p) => (
+                            <MenuItem key={p.id} value={p.id}>
+                              {p.name} ({p.gender}, {p.dob || "Age unknown"})
+                            </MenuItem>
+                          ))}
+                        </TextField>
+                      </Grid>
+                    )}
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
                       <TextField
-                        label="Select Patient Profile (Optional)"
+                        label="Patient Name"
+                        fullWidth
+                        size="small"
+                        required
+                        value={m.name}
+                        onChange={(e) =>
+                          updateMember(idx, "name", e.target.value)
+                        }
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 6, sm: 3 }}>
+                      <TextField
+                        label="Age"
+                        fullWidth
+                        size="small"
+                        type="number"
+                        value={m.age || ""}
+                        onChange={(e) =>
+                          updateMember(
+                            idx,
+                            "age",
+                            parseInt(e.target.value) || 0,
+                          )
+                        }
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 6, sm: 3 }}>
+                      <TextField
+                        label="Gender"
                         fullWidth
                         size="small"
                         select
-                        value={selectedProfiles[i] || "new"}
-                        onChange={(e) => handleProfileChange(i, e.target.value)}
-                        sx={{ mb: 1 }}
+                        value={m.gender}
+                        onChange={(e) =>
+                          updateMember(idx, "gender", e.target.value)
+                        }
                       >
-                        <MenuItem value="new">
-                          -- Create New Patient Profile --
-                        </MenuItem>
-                        {existingProfiles.map((p) => {
-                          const details = [];
-                          if (p.gender) details.push(p.gender);
-                          if (p.dob) details.push(p.dob);
-                          const desc =
-                            details.length > 0
-                              ? ` (${details.join(", ")})`
-                              : "";
-                          return (
-                            <MenuItem key={p.id} value={p.id}>
-                              {p.name}
-                              {desc}
-                            </MenuItem>
-                          );
-                        })}
+                        <MenuItem value="Male">Male</MenuItem>
+                        <MenuItem value="Female">Female</MenuItem>
+                        <MenuItem value="Other">Other</MenuItem>
                       </TextField>
                     </Grid>
-                  )}
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label="Name"
-                      fullWidth
-                      size="small"
-                      required
-                      value={m.name}
-                      onChange={(e) => updateMember(i, "name", e.target.value)}
-                    />
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        label="Test / Package Name"
+                        fullWidth
+                        size="small"
+                        value={m.testName || ""}
+                        onChange={(e) =>
+                          updateMember(idx, "testName", e.target.value)
+                        }
+                        placeholder="e.g. Routine Blood Test"
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12, sm: 6 }}>
+                      <TextField
+                        label="Relationship to Booker"
+                        fullWidth
+                        size="small"
+                        value={m.relationship || ""}
+                        onChange={(e) =>
+                          updateMember(idx, "relationship", e.target.value)
+                        }
+                      />
+                    </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <Box
+                        sx={{ display: "flex", gap: 1, alignItems: "center" }}
+                      >
+                        <TextField
+                          label="Unique Token ID (Auto-generated)"
+                          fullWidth
+                          size="small"
+                          disabled
+                          value={m.uniqueNumber || ""}
+                        />
+                        {selectedProfiles[idx] === undefined && (
+                          <Button
+                            variant="outlined"
+                            size="small"
+                            onClick={() => {
+                              setActiveMemberIndexForRegister(idx);
+                              setRegisterForm((prev) => ({
+                                ...prev,
+                                name: m.name,
+                                age: m.age,
+                                gender:
+                                  m.gender === "Male" || m.gender === "Female"
+                                    ? m.gender
+                                    : "Male",
+                                phone: selected.customerPhone || "",
+                                address: selected.locationAddress || "",
+                              }));
+                              setRegisterDialogOpen(true);
+                            }}
+                            sx={{
+                              minWidth: 160,
+                              height: 40,
+                              textTransform: "none",
+                              fontWeight: 700,
+                            }}
+                          >
+                            Register On-Site
+                          </Button>
+                        )}
+                      </Box>
+                    </Grid>
+
+                    <Grid size={{ xs: 12 }}>
+                      <TextField
+                        label="Additional Notes / Symptoms"
+                        fullWidth
+                        size="small"
+                        multiline
+                        rows={2}
+                        value={m.additionalNotes || ""}
+                        onChange={(e) =>
+                          updateMember(idx, "additionalNotes", e.target.value)
+                        }
+                      />
+                    </Grid>
                   </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <TextField
-                      label="Age"
-                      fullWidth
-                      size="small"
-                      type="number"
-                      value={m.age || ""}
-                      onChange={(e) =>
-                        updateMember(i, "age", parseInt(e.target.value) || 0)
-                      }
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 6, sm: 3 }}>
-                    <TextField
-                      label="Gender"
-                      fullWidth
-                      size="small"
-                      select
-                      value={m.gender}
-                      onChange={(e) =>
-                        updateMember(i, "gender", e.target.value)
-                      }
-                    >
-                      <MenuItem value="Male">Male</MenuItem>
-                      <MenuItem value="Female">Female</MenuItem>
-                      <MenuItem value="Other">Other</MenuItem>
-                    </TextField>
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label="Relationship"
-                      fullWidth
-                      size="small"
-                      value={m.relationship ?? ""}
-                      onChange={(e) =>
-                        updateMember(i, "relationship", e.target.value)
-                      }
-                    />
-                  </Grid>
-                  <Grid size={{ xs: 12, sm: 6 }}>
-                    <TextField
-                      label="Notes (optional)"
-                      fullWidth
-                      size="small"
-                      value={m.additionalNotes ?? ""}
-                      onChange={(e) =>
-                        updateMember(i, "additionalNotes", e.target.value)
-                      }
-                    />
-                  </Grid>
-                </Grid>
-                {i < members.length - 1 && <Divider sx={{ mt: 2 }} />}
-              </Box>
+                </CardContent>
+              </Card>
             ))}
           </DialogContent>
           <DialogActions sx={{ px: 3, pb: 2 }}>
-            <Button onClick={() => setMemberDialogOpen(false)} size="small">
-              Cancel
-            </Button>
+            <Button onClick={() => setMemberDialogOpen(false)}>Cancel</Button>
             <Button
               variant="contained"
               onClick={handleSaveMembers}
               disabled={memberSaving}
-              size="small"
-              sx={{ fontWeight: 600 }}
+              sx={{ fontWeight: 700 }}
             >
               {memberSaving ? (
                 <CircularProgress size={16} color="inherit" />
               ) : (
-                "Save Members"
+                "Save & Start Test"
+              )}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* On-the-spot profile registration Dialog */}
+        <Dialog
+          open={registerDialogOpen}
+          onClose={() => setRegisterDialogOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 800 }}>
+            On-Site Profile Registration
+          </DialogTitle>
+          <DialogContent dividers>
+            <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+              Add a new customer profile into the database on the spot. This
+              will generate their patient records.
+            </Typography>
+
+            {registerError && (
+              <Alert severity="error" sx={{ mb: 2 }}>
+                {registerError}
+              </Alert>
+            )}
+
+            <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+              <TextField
+                label="Full Name"
+                fullWidth
+                size="small"
+                required
+                value={registerForm.name}
+                onChange={(e) =>
+                  setRegisterForm((prev) => ({ ...prev, name: e.target.value }))
+                }
+              />
+
+              <TextField
+                label="Mobile Phone"
+                fullWidth
+                size="small"
+                value={registerForm.phone}
+                onChange={(e) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    phone: e.target.value,
+                  }))
+                }
+              />
+
+              <TextField
+                label="Email Address"
+                fullWidth
+                size="small"
+                value={registerForm.email}
+                onChange={(e) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    email: e.target.value,
+                  }))
+                }
+              />
+
+              <Grid container spacing={2}>
+                <Grid size={{ xs: 6 }}>
+                  <TextField
+                    label="Age"
+                    fullWidth
+                    size="small"
+                    type="number"
+                    value={registerForm.age || ""}
+                    onChange={(e) =>
+                      setRegisterForm((prev) => ({
+                        ...prev,
+                        age: parseInt(e.target.value) || 0,
+                      }))
+                    }
+                  />
+                </Grid>
+                <Grid size={{ xs: 6 }}>
+                  <TextField
+                    label="Gender"
+                    fullWidth
+                    size="small"
+                    select
+                    value={registerForm.gender}
+                    onChange={(e) =>
+                      setRegisterForm((prev) => ({
+                        ...prev,
+                        gender: e.target.value,
+                      }))
+                    }
+                  >
+                    <MenuItem value="Male">Male</MenuItem>
+                    <MenuItem value="Female">Female</MenuItem>
+                    <MenuItem value="Other">Other</MenuItem>
+                  </TextField>
+                </Grid>
+              </Grid>
+
+              <TextField
+                label="Full Address"
+                fullWidth
+                size="small"
+                multiline
+                rows={2}
+                value={registerForm.address}
+                onChange={(e) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    address: e.target.value,
+                  }))
+                }
+              />
+
+              <TextField
+                label="District"
+                fullWidth
+                size="small"
+                value={registerForm.district}
+                onChange={(e) =>
+                  setRegisterForm((prev) => ({
+                    ...prev,
+                    district: e.target.value,
+                  }))
+                }
+              />
+            </Box>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, pb: 2 }}>
+            <Button onClick={() => setRegisterDialogOpen(false)}>Cancel</Button>
+            <Button
+              variant="contained"
+              onClick={handleRegisterOnSite}
+              disabled={registerLoading}
+              sx={{ fontWeight: 700 }}
+            >
+              {registerLoading ? (
+                <CircularProgress size={16} color="inherit" />
+              ) : (
+                "Register Profile"
               )}
             </Button>
           </DialogActions>
@@ -889,7 +1366,7 @@ export default function StaffAppointmentsPage() {
           <Alert
             severity={snackbar.severity}
             onClose={() => setSnackbar((s) => ({ ...s, open: false }))}
-            sx={{ minWidth: 280, fontWeight: 600 }}
+            sx={{ minWidth: 280, fontWeight: 700 }}
           >
             {snackbar.message}
           </Alert>
@@ -898,7 +1375,7 @@ export default function StaffAppointmentsPage() {
     );
   }
 
-  // No selection: list view
+  // List view
   return (
     <>
       <Head>
