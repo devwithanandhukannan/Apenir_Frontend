@@ -264,7 +264,8 @@ export const useStaff = () => {
 
   // Derived display status
   const getMemberStatus = useCallback(
-    (member: LabStaffMember): "Active" | "Inactive" => {
+    (member: LabStaffMember): "Active" | "Inactive" | "Pending" => {
+      if (member.status === "notverified") return "Pending";
       if (member.isActive === false || member.status === "Inactive")
         return "Inactive";
       return "Active";

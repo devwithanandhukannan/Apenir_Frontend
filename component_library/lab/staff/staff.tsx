@@ -214,13 +214,22 @@ export const Staff: React.FC = () => {
         Cell: ({ row }) => {
           const statusVal = getMemberStatus(row);
           const isActive = statusVal === "Active";
-          const color = isActive ? "#10b981" : "#64748b";
+          const isPending = statusVal === "Pending";
+          const color = isActive
+            ? "#10b981"
+            : isPending
+              ? "#f59e0b"
+              : "#64748b";
           const bg = isActive
             ? "rgba(16, 185, 129, 0.04)"
-            : "rgba(100, 116, 139, 0.04)";
+            : isPending
+              ? "rgba(245, 158, 11, 0.04)"
+              : "rgba(100, 116, 139, 0.04)";
           const border = isActive
             ? "rgba(16, 185, 129, 0.25)"
-            : "rgba(100, 116, 139, 0.25)";
+            : isPending
+              ? "rgba(245, 158, 11, 0.25)"
+              : "rgba(100, 116, 139, 0.25)";
           return (
             <Chip
               label={statusVal}
