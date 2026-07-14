@@ -36,11 +36,9 @@ const authSlice = createSlice({
       state.isAuthenticated = true;
       state.isInitialized = true;
 
-      // Save session info to localStorage
+      // Save session info to localStorage (only user metadata, no tokens)
       if (typeof window !== "undefined") {
         localStorage.setItem("auth_user", JSON.stringify(action.payload.user));
-        localStorage.setItem("auth_token", action.payload.token);
-        localStorage.setItem("token", action.payload.token);
       }
     },
     logoutSuccess: (state) => {
@@ -52,25 +50,20 @@ const authSlice = createSlice({
       // Clear session info from localStorage
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth_user");
-        localStorage.removeItem("auth_token");
-        localStorage.removeItem("token");
       }
     },
     initializeAuth: (state) => {
       if (typeof window !== "undefined") {
         const userJson = localStorage.getItem("auth_user");
-        const token =
-          localStorage.getItem("auth_token") || localStorage.getItem("token");
 
-        if (userJson && token) {
+        if (userJson) {
           try {
             state.user = JSON.parse(userJson);
-            state.token = token;
+            state.token = null; // Access token is in-memory only and starts as null on refresh
             state.isAuthenticated = true;
           } catch (e) {
             // Invalid data in localStorage, clean it up
             localStorage.removeItem("auth_user");
-            localStorage.removeItem("auth_token");
           }
         }
       }

@@ -111,11 +111,6 @@ export default function CustomerLoginPage() {
         if (res.success && res.data) {
           const { accessToken, phone: userPhone } = res.data;
 
-          if (typeof window !== "undefined") {
-            localStorage.setItem("token", accessToken);
-            localStorage.setItem("auth_token", accessToken);
-          }
-
           const customerUser = {
             id: `cust_${userPhone}`,
             name: "Patient",

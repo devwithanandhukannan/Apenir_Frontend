@@ -1,7 +1,11 @@
-import { useCallback } from 'react';
-import { useApi, MutationRequestOptions, BaseRequestOptions } from '@/core_components/hooks/useApi/useApi';
-import { useAppDispatch } from '@/core_components/store/hooks';
-import { logoutSuccess } from '@/core_components/store/authSlice';
+import { useCallback } from "react";
+import {
+  useApi,
+  MutationRequestOptions,
+  BaseRequestOptions,
+} from "@/core_components/hooks/useApi/useApi";
+import { useAppDispatch } from "@/core_components/store/hooks";
+import { logoutSuccess } from "@/core_components/store/authSlice";
 
 export interface LoginRequest {
   email?: string;
@@ -32,21 +36,17 @@ export function useAuthenticationService() {
   const adminLogin = useCallback(
     async (
       payload: LoginRequest,
-      options?: Omit<MutationRequestOptions<LoginResponse, LoginRequest>, 'endpoint' | 'body' | 'requireAuth'>
+      options?: Omit<
+        MutationRequestOptions<LoginResponse, LoginRequest>,
+        "endpoint" | "body" | "requireAuth"
+      >,
     ) => {
       const response = await post<LoginResponse, LoginRequest>({
-        endpoint: '/api/AdminAuth/login', // Target login endpoint
+        endpoint: "/api/AdminAuth/login", // Target login endpoint
         body: payload,
         requireAuth: false, // Login call is public
         signal: options?.signal,
         onSuccess: (resData) => {
-          if (resData.success && resData.data?.accessToken) {
-            if (typeof window !== 'undefined') {
-              // Cache tokens in local storage
-              localStorage.setItem('token', resData.data.accessToken);
-              localStorage.setItem('auth_token', resData.data.accessToken);
-            }
-          }
           if (options?.onSuccess) {
             options.onSuccess(resData);
           }
@@ -59,27 +59,27 @@ export function useAuthenticationService() {
         headers: options?.headers,
         params: options?.params,
       });
-      
+
       return response;
     },
-    [post]
+    [post],
   );
 
   // Authentication logout API caller
   const logout = useCallback(
-    async (options?: Omit<BaseRequestOptions<any>, 'endpoint' | 'requireAuth'>) => {
+    async (
+      options?: Omit<BaseRequestOptions<any>, "endpoint" | "requireAuth">,
+    ) => {
       const response = await post<any>({
-        endpoint: '/api/Auth/logout', // Target logout endpoint
+        endpoint: "/api/Auth/logout", // Target logout endpoint
         requireAuth: true, // Requires bearer token authorization
         signal: options?.signal,
         onSuccess: (data) => {
           // Clear all session details from local storage
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('token');
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('auth_user');
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("auth_user");
           }
-          
+
           // Reset auth state in redux
           dispatch(logoutSuccess());
 
@@ -89,12 +89,10 @@ export function useAuthenticationService() {
         },
         onError: (err) => {
           // Fallback cleanup in case of request errors
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('token');
-            localStorage.removeItem('auth_token');
-            localStorage.removeItem('auth_user');
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("auth_user");
           }
-          
+
           dispatch(logoutSuccess());
 
           if (options?.onError) {
@@ -107,7 +105,7 @@ export function useAuthenticationService() {
 
       return response;
     },
-    [post, dispatch]
+    [post, dispatch],
   );
 
   return {

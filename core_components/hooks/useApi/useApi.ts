@@ -1,13 +1,17 @@
-import { useState, useCallback, useRef, useEffect } from 'react';
-import axios, { AxiosError, AxiosRequestConfig, Method } from 'axios';
-import { useAppDispatch, useAppSelector } from '@/core_components/store/hooks';
-import { loginSuccess, logoutSuccess } from '@/core_components/store/authSlice';
+import { useState, useCallback, useRef, useEffect } from "react";
+import axios, { AxiosError, AxiosRequestConfig, Method } from "axios";
+import { useAppDispatch, useAppSelector } from "@/core_components/store/hooks";
+import { loginSuccess, logoutSuccess } from "@/core_components/store/authSlice";
 
 // Configurable constant for local storage authentication key
-export const TOKEN_KEY = 'auth_token';
+export const TOKEN_KEY = "auth_token";
 
 // Fallback base URL for the api calls
-const DEFAULT_BASE_URL = typeof process !== 'undefined' ? (process.env.NEXT_PUBLIC_API_URL || '') : '';
+const DEFAULT_BASE_URL =
+  typeof process !== "undefined" ? process.env.NEXT_PUBLIC_API_URL || "" : "";
+
+// Shared active promise to coordinate concurrent token refresh requests across hook instances
+let activeRefreshPromise: Promise<string | null> | null = null;
 
 // Consistent response structure returned by request methods
 export interface ApiResponse<T> {
@@ -38,6 +42,7 @@ export function useApi() {
 
   const dispatch = useAppDispatch();
   const currentUser = useAppSelector((state) => state.auth.user);
+  const token = useAppSelector((state) => state.auth.token);
 
   // Track pending active controllers to abort them on component unmount
   const activeControllers = useRef<Set<AbortController>>(new Set());
@@ -52,7 +57,7 @@ export function useApi() {
   const request = useCallback(
     async <T = any, B = any>(
       method: Method,
-      options: MutationRequestOptions<T, B>
+      options: MutationRequestOptions<T, B>,
     ): Promise<ApiResponse<T>> => {
       const {
         endpoint,
@@ -78,19 +83,17 @@ export function useApi() {
 
       // Headers construction
       const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+        "Content-Type": "application/json",
         ...customHeaders,
       };
 
-      // Retrieve auth token from localStorage safely (SSR Safe)
-      if (requireAuth && typeof window !== 'undefined') {
-        const token = localStorage.getItem('token') || localStorage.getItem(TOKEN_KEY);
-        if (token) {
-          headers['Authorization'] = `Bearer ${token}`;
-        }
+      // Retrieve auth token from Redux state (in-memory only, SSR Safe)
+      if (requireAuth && token) {
+        headers["Authorization"] = `Bearer ${token}`;
       }
 
-      const isFullUrl = endpoint.startsWith('http://') || endpoint.startsWith('https://');
+      const isFullUrl =
+        endpoint.startsWith("http://") || endpoint.startsWith("https://");
       const url = isFullUrl ? endpoint : `${DEFAULT_BASE_URL}${endpoint}`;
 
       try {
@@ -128,43 +131,68 @@ export function useApi() {
 
         // Verify if the endpoint is an auth action to prevent infinite refresh recursion loops
         const isAuthEndpoint =
-          endpoint.includes('/Auth/refresh') ||
-          endpoint.includes('/auth/refresh') ||
-          endpoint.includes('/login') ||
-          endpoint.includes('/logout');
+          endpoint.includes("/Auth/refresh") ||
+          endpoint.includes("/auth/refresh") ||
+          endpoint.includes("/login") ||
+          endpoint.includes("/logout");
 
         // Check if error is 401 Unauthorized, authentication is required, and it's not a recursive call
-        if (axiosError.response?.status === 401 && requireAuth && !isAuthEndpoint) {
+        if (
+          axiosError.response?.status === 401 &&
+          requireAuth &&
+          !isAuthEndpoint
+        ) {
           try {
-            // Trigger refresh token API call using HttpOnly credentials
-            const refreshResponse = await axios.post<any>(
-              `${DEFAULT_BASE_URL}/api/Auth/refresh`,
-              {},
-              { withCredentials: true }
-            );
+            // Coordinate concurrent refresh token requests
+            if (!activeRefreshPromise) {
+              activeRefreshPromise = (async () => {
+                try {
+                  const refreshResponse = await axios.post<any>(
+                    `${DEFAULT_BASE_URL}/api/Auth/refresh`,
+                    {},
+                    { withCredentials: true },
+                  );
 
-            if (
-              refreshResponse.data &&
-              refreshResponse.data.success &&
-              refreshResponse.data.data?.accessToken
-            ) {
-              const newAccessToken = refreshResponse.data.data.accessToken;
+                  if (
+                    refreshResponse.data &&
+                    refreshResponse.data.success &&
+                    refreshResponse.data.data?.accessToken
+                  ) {
+                    return refreshResponse.data.data.accessToken;
+                  }
+                  return null;
+                } catch (e) {
+                  return null;
+                } finally {
+                  activeRefreshPromise = null;
+                }
+              })();
+            }
 
-              // Cache the new access token in localStorage
-              if (typeof window !== 'undefined') {
-                localStorage.setItem('token', newAccessToken);
-                localStorage.setItem('auth_token', newAccessToken);
+            const newAccessToken = await activeRefreshPromise;
+
+            if (newAccessToken) {
+              // Update Redux state
+              let userToLogin = currentUser;
+              if (!userToLogin && typeof window !== "undefined") {
+                const userJson = localStorage.getItem("auth_user");
+                if (userJson) {
+                  try {
+                    userToLogin = JSON.parse(userJson);
+                  } catch (e) {}
+                }
               }
 
-              // Update Redux state
-              if (currentUser) {
-                dispatch(loginSuccess({ user: currentUser, token: newAccessToken }));
+              if (userToLogin) {
+                dispatch(
+                  loginSuccess({ user: userToLogin, token: newAccessToken }),
+                );
               }
 
               // Retry the original failed request
               const retryHeaders = {
                 ...headers,
-                'Authorization': `Bearer ${newAccessToken}`,
+                Authorization: `Bearer ${newAccessToken}`,
               };
 
               const retryConfig: AxiosRequestConfig = {
@@ -188,13 +216,31 @@ export function useApi() {
                 success: true,
                 data: retryResponseData,
               };
+            } else {
+              // Clear local credentials and dispatch logout if refresh token expired/revoked
+              if (typeof window !== "undefined") {
+                localStorage.removeItem("auth_user");
+              }
+              dispatch(logoutSuccess());
+
+              const customError = new Error(
+                "Session expired. Please log in again.",
+              ) as AxiosError;
+              setError(customError);
+
+              if (onError) {
+                onError(customError);
+              }
+
+              return {
+                success: false,
+                error: customError,
+              };
             }
           } catch (refreshErr) {
             // Clear local credentials and dispatch logout if refresh token expired/revoked
-            if (typeof window !== 'undefined') {
-              localStorage.removeItem('token');
-              localStorage.removeItem('auth_token');
-              localStorage.removeItem('auth_user');
+            if (typeof window !== "undefined") {
+              localStorage.removeItem("auth_user");
             }
             dispatch(logoutSuccess());
 
@@ -229,32 +275,35 @@ export function useApi() {
         setLoading(false);
       }
     },
-    [currentUser, dispatch]
+    [currentUser, dispatch, token],
   );
 
   const get = useCallback(
-    <T = any>(options: BaseRequestOptions<T>) => request<T>('GET', options),
-    [request]
+    <T = any>(options: BaseRequestOptions<T>) => request<T>("GET", options),
+    [request],
   );
 
   const post = useCallback(
-    <T = any, B = any>(options: MutationRequestOptions<T, B>) => request<T, B>('POST', options),
-    [request]
+    <T = any, B = any>(options: MutationRequestOptions<T, B>) =>
+      request<T, B>("POST", options),
+    [request],
   );
 
   const put = useCallback(
-    <T = any, B = any>(options: MutationRequestOptions<T, B>) => request<T, B>('PUT', options),
-    [request]
+    <T = any, B = any>(options: MutationRequestOptions<T, B>) =>
+      request<T, B>("PUT", options),
+    [request],
   );
 
   const patch = useCallback(
-    <T = any, B = any>(options: MutationRequestOptions<T, B>) => request<T, B>('PATCH', options),
-    [request]
+    <T = any, B = any>(options: MutationRequestOptions<T, B>) =>
+      request<T, B>("PATCH", options),
+    [request],
   );
 
   const del = useCallback(
-    <T = any>(options: BaseRequestOptions<T>) => request<T>('DELETE', options),
-    [request]
+    <T = any>(options: BaseRequestOptions<T>) => request<T>("DELETE", options),
+    [request],
   );
 
   return {

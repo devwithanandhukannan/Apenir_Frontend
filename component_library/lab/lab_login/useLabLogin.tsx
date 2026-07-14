@@ -53,12 +53,6 @@ export function useLabLogin() {
       if (response.success && response.data) {
         const { labId, email: userEmail, accessToken, role } = response.data;
 
-        // Cache tokens in local storage
-        if (typeof window !== "undefined") {
-          localStorage.setItem("token", accessToken);
-          localStorage.setItem("auth_token", accessToken);
-        }
-
         const isStaff = role === "staff";
         const labUser = {
           id: labId,
