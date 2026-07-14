@@ -40,6 +40,7 @@ const authSlice = createSlice({
       if (typeof window !== "undefined") {
         localStorage.setItem("auth_user", JSON.stringify(action.payload.user));
         localStorage.setItem("auth_token", action.payload.token);
+        localStorage.setItem("token", action.payload.token);
       }
     },
     logoutSuccess: (state) => {
@@ -52,12 +53,14 @@ const authSlice = createSlice({
       if (typeof window !== "undefined") {
         localStorage.removeItem("auth_user");
         localStorage.removeItem("auth_token");
+        localStorage.removeItem("token");
       }
     },
     initializeAuth: (state) => {
       if (typeof window !== "undefined") {
         const userJson = localStorage.getItem("auth_user");
-        const token = localStorage.getItem("auth_token");
+        const token =
+          localStorage.getItem("auth_token") || localStorage.getItem("token");
 
         if (userJson && token) {
           try {
