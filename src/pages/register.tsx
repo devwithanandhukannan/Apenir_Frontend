@@ -720,3 +720,5 @@ export default function Register() {
     </Container>
   );
 }
+
+Register.getLayout = (page: React.ReactNode) => page;

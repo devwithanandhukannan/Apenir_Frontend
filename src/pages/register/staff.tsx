@@ -12,6 +12,9 @@ import CircularProgress from "@mui/material/CircularProgress";
 import PersonIcon from "@mui/icons-material/Person";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ArrowForwardIcon from "@mui/icons-material/ArrowForward";
+import PhoneAndroidIcon from "@mui/icons-material/PhoneAndroid";
+import LockIcon from "@mui/icons-material/Lock";
+import LinearProgress from "@mui/material/LinearProgress";
 import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
 
@@ -149,12 +152,13 @@ export default function RegisterStaff() {
           alignItems: "center",
           justifyContent: "center",
           minHeight: "100vh",
-          bgcolor: "background.default",
+          bgcolor: "#f8fafc",
+          p: 3,
         }}
       >
-        <CircularProgress color="secondary" size={48} sx={{ mb: 2 }} />
+        <CircularProgress color="primary" size={40} sx={{ mb: 2 }} />
         <Typography
-          variant="body1"
+          variant="body2"
           color="text.secondary"
           sx={{ fontWeight: 600 }}
         >
@@ -166,350 +170,380 @@ export default function RegisterStaff() {
 
   if (errorMsg) {
     return (
-      <Container
-        maxWidth="sm"
+      <Box
         sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           minHeight: "100vh",
+          bgcolor: "#f8fafc",
+          p: 2,
         }}
       >
-        <Card
-          sx={{
-            border: "1px solid var(--color-border)",
-            borderRadius: "16px",
-            p: 2,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
-          }}
-        >
-          <CardContent sx={{ textAlign: "center" }}>
-            <PersonIcon sx={{ fontSize: 48, color: "error.main", mb: 2 }} />
-            <Typography
-              variant="h5"
-              sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.5px" }}
-            >
-              Invitation Expired
-            </Typography>
-            <Alert
-              severity="error"
-              sx={{ mb: 3, borderRadius: "8px", fontWeight: 500 }}
-            >
-              {errorMsg}
-            </Alert>
-            <Button
-              variant="contained"
-              color="primary"
-              fullWidth
-              onClick={() => router.push("/lab/login")}
-              sx={{
-                textTransform: "none",
-                py: 1.2,
-                fontWeight: 700,
-                borderRadius: "8px",
-              }}
-            >
-              Back to Portal Login
-            </Button>
-          </CardContent>
-        </Card>
-      </Container>
+        <Container maxWidth="xs" disableGutters>
+          <Card
+            elevation={0}
+            sx={{
+              border: "1px solid #e2e8f0",
+              borderRadius: "16px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+            }}
+          >
+            <CardContent sx={{ textAlign: "center", p: 4 }}>
+              <PersonIcon sx={{ fontSize: 48, color: "error.main", mb: 2 }} />
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.5px" }}
+              >
+                Invitation Expired
+              </Typography>
+              <Alert
+                severity="error"
+                sx={{
+                  mb: 3,
+                  borderRadius: "8px",
+                  fontWeight: 500,
+                  fontSize: 13,
+                }}
+              >
+                {errorMsg}
+              </Alert>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => router.push("/lab/login")}
+                sx={{
+                  textTransform: "none",
+                  py: 1.2,
+                  fontWeight: 700,
+                  borderRadius: "8px",
+                }}
+              >
+                Back to Portal Login
+              </Button>
+            </CardContent>
+          </Card>
+        </Container>
+      </Box>
     );
   }
 
   if (success) {
     return (
-      <Container
-        maxWidth="sm"
+      <Box
         sx={{
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
           minHeight: "100vh",
+          bgcolor: "#f8fafc",
+          p: 2,
         }}
       >
-        <Card
-          sx={{
-            border: "1px solid var(--color-border)",
-            borderRadius: "16px",
-            p: 3,
-            boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
-          }}
-        >
-          <CardContent sx={{ textAlign: "center" }}>
-            <Box
-              sx={{
-                display: "inline-flex",
-                p: 2,
-                borderRadius: "50%",
-                bgcolor: "rgba(16,185,129,0.08)",
-                color: "secondary.main",
-                mb: 2,
-              }}
-            >
-              <CheckCircleIcon sx={{ fontSize: 48 }} />
-            </Box>
-            <Typography
-              variant="h5"
-              sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.5px" }}
-            >
-              Activation Complete!
-            </Typography>
-            <Typography
-              variant="body2"
-              color="text.secondary"
-              sx={{ mb: 4, px: 2 }}
-            >
-              Your phlebotomist profile has been activated successfully. You can
-              now login to your portal to access scheduled bookings.
-            </Typography>
-            <Button
-              variant="contained"
-              color="secondary"
-              fullWidth
-              onClick={() => router.push("/lab/login")}
-              sx={{
-                textTransform: "none",
-                py: 1.2,
-                fontWeight: 700,
-                borderRadius: "8px",
-              }}
-            >
-              Proceed to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </Container>
+        <Container maxWidth="xs" disableGutters>
+          <Card
+            elevation={0}
+            sx={{
+              border: "1px solid #e2e8f0",
+              borderRadius: "16px",
+              boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+            }}
+          >
+            <CardContent sx={{ textAlign: "center", p: 4 }}>
+              <Box
+                sx={{
+                  display: "inline-flex",
+                  p: 2,
+                  borderRadius: "50%",
+                  bgcolor: "rgba(16,185,129,0.08)",
+                  color: "success.main",
+                  mb: 2,
+                }}
+              >
+                <CheckCircleIcon sx={{ fontSize: 40 }} />
+              </Box>
+              <Typography
+                variant="h6"
+                sx={{ fontWeight: 800, mb: 1, letterSpacing: "-0.5px" }}
+              >
+                Activation Complete!
+              </Typography>
+              <Typography
+                variant="body2"
+                color="text.secondary"
+                sx={{ mb: 4, px: 1, lineHeight: 1.5 }}
+              >
+                Your phlebotomist profile has been activated successfully. You
+                can now login to your portal to access scheduled bookings.
+              </Typography>
+              <Button
+                variant="contained"
+                fullWidth
+                onClick={() => router.push("/lab/login")}
+                sx={{
+                  textTransform: "none",
+                  py: 1.2,
+                  fontWeight: 700,
+                  borderRadius: "8px",
+                }}
+              >
+                Proceed to Login
+              </Button>
+            </CardContent>
+          </Card>
+        </Container>
+      </Box>
     );
   }
 
+  const progressPercent = step === 1 ? 33 : step === 2 ? 66 : 100;
+
   return (
-    <Container
-      maxWidth="sm"
+    <Box
       sx={{
         display: "flex",
         flexDirection: "column",
         justifyContent: "center",
+        alignItems: "center",
         minHeight: "100vh",
-        py: 4,
+        bgcolor: "#f8fafc",
+        p: 2,
       }}
     >
       <Toaster />
 
-      <Box sx={{ mb: 4, textAlign: "center" }}>
-        <Typography
-          variant="h4"
-          sx={{ fontWeight: 900, mb: 1, letterSpacing: "-1.0px" }}
+      <Container maxWidth="xs" disableGutters sx={{ width: "100%" }}>
+        {/* Onboarding Header */}
+        <Box sx={{ mb: 3, textAlign: "center" }}>
+          <Typography
+            variant="h5"
+            sx={{ fontWeight: 900, mb: 0.5, letterSpacing: "-0.5px" }}
+          >
+            Onboard Phlebotomist
+          </Typography>
+          <Typography variant="caption" color="text.secondary">
+            Welcome, <strong>{staffDetails?.name}</strong> (
+            {staffDetails?.email})
+          </Typography>
+        </Box>
+
+        {/* Dynamic Mobile Stepper Progress Bar */}
+        <Box sx={{ mb: 3, px: 1 }}>
+          <Box sx={{ display: "flex", justifyContent: "space-between", mb: 1 }}>
+            <Typography variant="caption" sx={{ fontWeight: 700 }}>
+              Step {step} of 3
+            </Typography>
+            <Typography variant="caption" color="text.secondary">
+              {step === 1
+                ? "Set Account Password"
+                : step === 2
+                  ? "Verify Phone Number"
+                  : "Finish Setup"}
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={progressPercent}
+            color="primary"
+            sx={{ height: 6, borderRadius: 3, bgcolor: "#e2e8f0" }}
+          />
+        </Box>
+
+        <Card
+          elevation={0}
+          sx={{
+            border: "1px solid #e2e8f0",
+            borderRadius: "16px",
+            boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+          }}
         >
-          Onboard Phlebotomist
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Welcome to LabCare, <strong>{staffDetails?.name}</strong> (
-          {staffDetails?.email})
-        </Typography>
-      </Box>
-
-      {/* Progress indicators */}
-      <Box
-        sx={{ display: "flex", justifyContent: "space-between", mb: 4, px: 4 }}
-      >
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              borderRadius: "50%",
-              bgcolor: step >= 1 ? "secondary.main" : "var(--color-border)",
-              color: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "12px",
-              fontWeight: 700,
-            }}
-          >
-            1
-          </Box>
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: step === 1 ? 700 : 500 }}
-          >
-            Set Password
-          </Typography>
-        </Box>
-        <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          <Box
-            sx={{
-              width: 24,
-              height: 24,
-              borderRadius: "50%",
-              bgcolor: step >= 2 ? "secondary.main" : "var(--color-border)",
-              color: "white",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              fontSize: "12px",
-              fontWeight: 700,
-            }}
-          >
-            2
-          </Box>
-          <Typography
-            variant="body2"
-            sx={{ fontWeight: step === 2 ? 700 : 500 }}
-          >
-            Phone Verify
-          </Typography>
-        </Box>
-      </Box>
-
-      <Card
-        sx={{
-          border: "1px solid var(--color-border)",
-          borderRadius: "16px",
-          boxShadow: "0 8px 32px rgba(0,0,0,0.05)",
-          overflow: "visible",
-        }}
-      >
-        <CardContent sx={{ p: 4 }}>
-          {step === 1 && (
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>
-                🔒 Set Your Account Password
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Provide a secure password to register your new phlebotomist
-                dashboard login.
-              </Typography>
-
-              <TextField
-                label="New Password"
-                type="password"
-                fullWidth
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                sx={{ mb: 4 }}
-              />
-
-              <Button
-                variant="contained"
-                color="secondary"
-                fullWidth
-                disabled={password.length < 6}
-                onClick={() => setStep(2)}
-                endIcon={<ArrowForwardIcon />}
-                sx={{
-                  textTransform: "none",
-                  py: 1.5,
-                  fontWeight: 700,
-                  borderRadius: "8px",
-                }}
-              >
-                Continue Setup
-              </Button>
-            </Box>
-          )}
-
-          {step === 2 && (
-            <Box>
-              <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>
-                📱 Phone Verification
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-                Register your WhatsApp phone number to receive real-time booking
-                alerts and verification OTPs.
-              </Typography>
-
-              <Box sx={{ display: "flex", gap: 1, mb: 3 }}>
-                <TextField
-                  label="WhatsApp Phone Number"
-                  placeholder="e.g. 919876543210"
-                  fullWidth
-                  value={phone}
-                  disabled={otpSent}
-                  onChange={(e) => setPhone(e.target.value)}
-                />
-                {!otpSent && (
-                  <Button
-                    variant="outlined"
-                    color="secondary"
-                    onClick={handleSendOtp}
-                    disabled={isSendingOtp || phone.length < 10}
-                    sx={{ textTransform: "none", px: 3, fontWeight: 700 }}
-                  >
-                    {isSendingOtp ? <CircularProgress size={20} /> : "Send OTP"}
-                  </Button>
-                )}
-              </Box>
-
-              {otpSent && (
-                <Box sx={{ mb: 4 }}>
-                  <Typography variant="body2" sx={{ fontWeight: 600, mb: 1 }}>
-                    Enter 4-Digit Verification Code
+          <CardContent sx={{ p: 3 }}>
+            {step === 1 && (
+              <Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    alignItems: "center",
+                    mb: 1.5,
+                  }}
+                >
+                  <LockIcon color="primary" sx={{ fontSize: 20 }} />
+                  <Typography variant="body1" sx={{ fontWeight: 800 }}>
+                    Set Account Password
                   </Typography>
-                  <Box sx={{ display: "flex", gap: 1 }}>
-                    <TextField
-                      label="OTP Code"
-                      placeholder="XXXX"
-                      fullWidth
-                      value={otpCode}
-                      onChange={(e) => setOtpCode(e.target.value)}
-                    />
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mb: 3, lineHeight: 1.4 }}
+                >
+                  Provide a secure password to register your new phlebotomist
+                  dashboard login.
+                </Typography>
+
+                <TextField
+                  label="Password"
+                  type="password"
+                  fullWidth
+                  size="small"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  sx={{ mb: 3 }}
+                />
+
+                <Button
+                  variant="contained"
+                  fullWidth
+                  disabled={password.length < 6}
+                  onClick={() => setStep(2)}
+                  endIcon={<ArrowForwardIcon />}
+                  sx={{
+                    textTransform: "none",
+                    py: 1.2,
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                  }}
+                >
+                  Continue Setup
+                </Button>
+              </Box>
+            )}
+
+            {step === 2 && (
+              <Box>
+                <Box
+                  sx={{
+                    display: "flex",
+                    gap: 1,
+                    alignItems: "center",
+                    mb: 1.5,
+                  }}
+                >
+                  <PhoneAndroidIcon color="primary" sx={{ fontSize: 20 }} />
+                  <Typography variant="body1" sx={{ fontWeight: 800 }}>
+                    Phone Verification
+                  </Typography>
+                </Box>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mb: 3, lineHeight: 1.4 }}
+                >
+                  Register your WhatsApp phone number to receive real-time
+                  booking alerts and verification OTPs.
+                </Typography>
+
+                <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                  <TextField
+                    label="WhatsApp Phone Number"
+                    placeholder="e.g. 919876543210"
+                    fullWidth
+                    size="small"
+                    value={phone}
+                    disabled={otpSent}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
+                  {!otpSent ? (
                     <Button
                       variant="contained"
-                      color="secondary"
-                      onClick={handleVerifyOtp}
-                      disabled={isVerifyingOtp || otpCode.length !== 4}
-                      sx={{ textTransform: "none", px: 3, fontWeight: 700 }}
+                      onClick={handleSendOtp}
+                      disabled={isSendingOtp || phone.length < 10}
+                      sx={{
+                        textTransform: "none",
+                        py: 1.2,
+                        fontWeight: 700,
+                        borderRadius: "8px",
+                      }}
                     >
-                      {isVerifyingOtp ? (
-                        <CircularProgress size={20} />
+                      {isSendingOtp ? (
+                        <CircularProgress size={18} color="inherit" />
                       ) : (
-                        "Verify Code"
+                        "Send OTP"
                       )}
                     </Button>
-                  </Box>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: 2,
+                        mt: 1,
+                      }}
+                    >
+                      <TextField
+                        label="6-Digit OTP Code"
+                        placeholder="XXXXXX"
+                        fullWidth
+                        size="small"
+                        value={otpCode}
+                        onChange={(e) => setOtpCode(e.target.value)}
+                      />
+                      <Button
+                        variant="contained"
+                        onClick={handleVerifyOtp}
+                        disabled={isVerifyingOtp || otpCode.length !== 6}
+                        sx={{
+                          textTransform: "none",
+                          py: 1.2,
+                          fontWeight: 700,
+                          borderRadius: "8px",
+                        }}
+                      >
+                        {isVerifyingOtp ? (
+                          <CircularProgress size={18} color="inherit" />
+                        ) : (
+                          "Verify Code"
+                        )}
+                      </Button>
+                    </Box>
+                  )}
                 </Box>
-              )}
-            </Box>
-          )}
+              </Box>
+            )}
 
-          {step === 3 && (
-            <Box sx={{ textAlign: "center" }}>
-              <CheckCircleIcon
-                sx={{ fontSize: 64, color: "success.main", mb: 2 }}
-              />
-              <Typography variant="h6" sx={{ fontWeight: 800, mb: 1 }}>
-                All Set!
-              </Typography>
-              <Typography variant="body2" color="text.secondary" sx={{ mb: 4 }}>
-                Password configured and phone number verified successfully.
-                Click below to activate your profile.
-              </Typography>
+            {step === 3 && (
+              <Box sx={{ textAlign: "center", py: 1 }}>
+                <CheckCircleIcon
+                  sx={{ fontSize: 56, color: "success.main", mb: 1.5 }}
+                />
+                <Typography variant="body1" sx={{ fontWeight: 800, mb: 1 }}>
+                  Verification Complete!
+                </Typography>
+                <Typography
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: "block", mb: 4, px: 2, lineHeight: 1.4 }}
+                >
+                  Password configured and phone number verified successfully.
+                  Click below to activate your profile.
+                </Typography>
 
-              <Button
-                variant="contained"
-                color="secondary"
-                fullWidth
-                onClick={handleCompleteSetup}
-                disabled={isSubmitting}
-                sx={{
-                  textTransform: "none",
-                  py: 1.5,
-                  fontWeight: 700,
-                  borderRadius: "8px",
-                }}
-              >
-                {isSubmitting ? (
-                  <CircularProgress size={24} />
-                ) : (
-                  "Activate Profile"
-                )}
-              </Button>
-            </Box>
-          )}
-        </CardContent>
-      </Card>
-    </Container>
+                <Button
+                  variant="contained"
+                  fullWidth
+                  onClick={handleCompleteSetup}
+                  disabled={isSubmitting}
+                  sx={{
+                    textTransform: "none",
+                    py: 1.2,
+                    fontWeight: 700,
+                    borderRadius: "8px",
+                  }}
+                >
+                  {isSubmitting ? (
+                    <CircularProgress size={20} color="inherit" />
+                  ) : (
+                    "Activate Profile"
+                  )}
+                </Button>
+              </Box>
+            )}
+          </CardContent>
+        </Card>
+      </Container>
+    </Box>
   );
 }
+
+RegisterStaff.getLayout = (page: React.ReactNode) => page;

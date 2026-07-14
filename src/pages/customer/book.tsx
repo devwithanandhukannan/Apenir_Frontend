@@ -314,10 +314,14 @@ export default function CustomerBookPage() {
     await bookAppointment(payload, {
       onSuccess: (res) => {
         setBooking(false);
-        setBooked(true);
-        setBookedApptNumber(res.data?.appointmentNumber ?? "");
-        setBookedPasscode(res.data?.passcode ?? "");
-        setBookedAddress(res.data?.locationAddress ?? "");
+        if (res.data && (res.data as any).paymentUrl) {
+          window.location.href = (res.data as any).paymentUrl;
+        } else {
+          setBooked(true);
+          setBookedApptNumber(res.data?.appointmentNumber ?? "");
+          setBookedPasscode(res.data?.passcode ?? "");
+          setBookedAddress(res.data?.locationAddress ?? "");
+        }
       },
       onError: (err) => {
         setBooking(false);
