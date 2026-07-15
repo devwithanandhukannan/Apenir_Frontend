@@ -22,6 +22,8 @@ import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
 import { useCustomerService } from "@/core_components/apis/admin/customerService/useCustomerService";
+import Checkbox from "@mui/material/Checkbox";
+import FormControlLabel from "@mui/material/FormControlLabel";
 import MapLocationPicker from "@/component_library/MapLocationPicker";
 
 import ScienceIcon from "@mui/icons-material/Science";
@@ -186,6 +188,25 @@ export default function CustomerBookPage() {
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
   const [memberCount, setMemberCount] = useState(1);
+  const [memberSelections, setMemberSelections] = useState<
+    { name: string; itemIds: string[] }[]
+  >([]);
+
+  useEffect(() => {
+    setMemberSelections((prev) => {
+      const next = [...prev];
+      if (next.length > memberCount) {
+        return next.slice(0, memberCount);
+      }
+      while (next.length < memberCount) {
+        next.push({
+          name: next.length === 0 ? "Self" : `Member ${next.length + 1}`,
+          itemIds: cart.map((c) => c.id),
+        });
+      }
+      return next;
+    });
+  }, [memberCount, cart]);
 
   // Step 5: Confirmation
   const [booking, setBooking] = useState(false);
@@ -310,6 +331,10 @@ export default function CustomerBookPage() {
       buildingDetails: building,
       landmark,
       floor,
+      memberSelections: memberSelections.map((ms) => ({
+        name: ms.name,
+        itemIds: ms.itemIds,
+      })),
     };
     await bookAppointment(payload, {
       onSuccess: (res) => {
@@ -335,10 +360,27 @@ export default function CustomerBookPage() {
 
   // Split prices calculation
   const subtotal = cart.reduce((sum, item) => sum + item.basePrice, 0);
-  const memberDiscount =
-    memberCount > 1 ? Math.round((memberCount - 1) * subtotal * 0.2) : 0;
+  const memberTotals = memberSelections.map((selection, idx) => {
+    const sum = selection.itemIds.reduce((s, id) => {
+      const item = cart.find((c) => c.id === id);
+      return s + (item?.basePrice ?? 0);
+    }, 0);
+    return {
+      name: selection.name,
+      sum,
+      finalAmount: idx === 0 ? sum : Math.round(sum * 0.8),
+      discount: idx === 0 ? 0 : Math.round(sum * 0.2),
+    };
+  });
+
+  const baseSubtotalTotal = memberTotals.reduce((sum, m) => sum + m.sum, 0);
+  const totalMemberDiscount = memberTotals.reduce(
+    (sum, m) => sum + m.discount,
+    0,
+  );
   const travelFee = selectedLab?.travelFee ?? 0;
-  const grandTotal = subtotal * memberCount - memberDiscount + travelFee;
+  const grandTotal =
+    memberTotals.reduce((sum, m) => sum + m.finalAmount, 0) + travelFee;
 
   if (booked) {
     return (
@@ -1124,6 +1166,107 @@ export default function CustomerBookPage() {
               </Grid>
             </Grid>
 
+            {/* Granular member selection */}
+            <Box sx={{ mt: 3 }}>
+              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
+                Configure Test Selections per Person
+              </Typography>
+              <Typography
+                variant="caption"
+                color="text.secondary"
+                sx={{ display: "block", mb: 2 }}
+              >
+                Assign specific services/packages to each member. Each person
+                must have at least one test selected.
+              </Typography>
+              <Grid container spacing={2}>
+                {memberSelections.map((selection, idx) => (
+                  <Grid size={{ xs: 12 }} key={idx}>
+                    <Card variant="outlined" sx={{ p: 2, borderRadius: "8px" }}>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          gap: 2,
+                          alignItems: "center",
+                          mb: 1.5,
+                          flexWrap: "wrap",
+                        }}
+                      >
+                        <TextField
+                          size="small"
+                          label={`Person ${idx + 1} Name`}
+                          value={selection.name}
+                          onChange={(e) => {
+                            const newSels = [...memberSelections];
+                            newSels[idx] = {
+                              ...newSels[idx],
+                              name: e.target.value,
+                            };
+                            setMemberSelections(newSels);
+                          }}
+                          sx={{ maxWidth: "200px" }}
+                        />
+                        {idx > 0 && (
+                          <Typography
+                            variant="caption"
+                            color="success.main"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            ⭐ 20% member discount applies to all tests for this
+                            person
+                          </Typography>
+                        )}
+                      </Box>
+                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
+                        {cart.map((item) => {
+                          const isChecked = selection.itemIds.includes(item.id);
+                          return (
+                            <FormControlLabel
+                              key={item.id}
+                              control={
+                                <Checkbox
+                                  size="small"
+                                  checked={isChecked}
+                                  onChange={(
+                                    e: React.ChangeEvent<HTMLInputElement>,
+                                  ) => {
+                                    const newSels = [...memberSelections];
+                                    const currentItems = [
+                                      ...newSels[idx].itemIds,
+                                    ];
+                                    if (e.target.checked) {
+                                      currentItems.push(item.id);
+                                    } else {
+                                      const index = currentItems.indexOf(
+                                        item.id,
+                                      );
+                                      if (index > -1)
+                                        currentItems.splice(index, 1);
+                                    }
+                                    newSels[idx] = {
+                                      ...newSels[idx],
+                                      itemIds: currentItems,
+                                    };
+                                    setMemberSelections(newSels);
+                                  }}
+                                />
+                              }
+                              label={`${item.name} (₹${item.basePrice})`}
+                              sx={{
+                                "& .MuiFormControlLabel-label": {
+                                  fontSize: "0.875rem",
+                                },
+                              }}
+                            />
+                          );
+                        })}
+                      </Box>
+                    </Card>
+                  </Grid>
+                ))}
+              </Grid>
+            </Box>
+
             <Box
               sx={{
                 display: "flex",
@@ -1141,7 +1284,10 @@ export default function CustomerBookPage() {
               </Button>
               <Button
                 variant="contained"
-                disabled={!selectedSlot}
+                disabled={
+                  !selectedSlot ||
+                  memberSelections.some((m) => m.itemIds.length === 0)
+                }
                 onClick={() => setStep(4)}
                 sx={{ fontWeight: 700 }}
               >
@@ -1176,21 +1322,72 @@ export default function CustomerBookPage() {
                         color="text.secondary"
                         sx={{ fontWeight: 700, mb: 1, display: "block" }}
                       >
-                        Selected Tests & Cost Details
+                        Selected Tests per Patient
                       </Typography>
-                      {cart.map((item) => (
+                      {memberSelections.map((selection, idx) => (
                         <Box
-                          key={item.id}
+                          key={idx}
                           sx={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            mb: 1,
+                            mb: 1.5,
+                            p: 1.5,
+                            borderRadius: "6px",
+                            backgroundColor: "action.hover",
+                            border: "1px solid",
+                            borderColor: "divider",
                           }}
                         >
-                          <Typography variant="body2">• {item.name}</Typography>
-                          <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                            ₹{item.basePrice}
+                          <Typography
+                            variant="subtitle2"
+                            sx={{
+                              fontWeight: 700,
+                              fontSize: "0.85rem",
+                              color: "primary.main",
+                            }}
+                          >
+                            👤 {selection.name}{" "}
+                            {idx > 0 && "(20% Member Discount)"}
                           </Typography>
+                          {selection.itemIds.map((id) => {
+                            const item = cart.find((c) => c.id === id);
+                            if (!item) return null;
+                            const discountRate = idx === 0 ? 1 : 0.8;
+                            return (
+                              <Box
+                                key={id}
+                                sx={{
+                                  display: "flex",
+                                  justifyContent: "space-between",
+                                  pl: 2,
+                                  mt: 0.5,
+                                }}
+                              >
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  • {item.name}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  sx={{ fontWeight: 600 }}
+                                >
+                                  ₹{Math.round(item.basePrice * discountRate)}{" "}
+                                  {idx > 0 && (
+                                    <span
+                                      style={{
+                                        textDecoration: "line-through",
+                                        color: "gray",
+                                        fontSize: "0.7rem",
+                                        marginLeft: "4px",
+                                      }}
+                                    >
+                                      ₹{item.basePrice}
+                                    </span>
+                                  )}
+                                </Typography>
+                              </Box>
+                            );
+                          })}
                         </Box>
                       ))}
                     </Box>
@@ -1217,7 +1414,7 @@ export default function CustomerBookPage() {
                           {memberCount > 1 ? "s" : ""})
                         </Typography>
                         <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                          ₹{subtotal * memberCount}
+                          ₹{baseSubtotalTotal}
                         </Typography>
                       </Box>
                       {memberCount > 1 && (
@@ -1235,7 +1432,7 @@ export default function CustomerBookPage() {
                             color="success.main"
                             sx={{ fontWeight: 600 }}
                           >
-                            - ₹{memberDiscount}
+                            - ₹{totalMemberDiscount}
                           </Typography>
                         </Box>
                       )}

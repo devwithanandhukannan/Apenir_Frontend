@@ -150,6 +150,7 @@ export interface LabItem {
   status: string | null;
   labId: string | null;
   serviceRangeKm: number;
+  perKmCharge?: number;
   notificationPhone: string | null;
   createdBy: string;
   createdAt: string;

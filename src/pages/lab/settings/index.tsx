@@ -69,6 +69,7 @@ export default function LabSettings() {
   const [latitude, setLatitude] = useState("0");
   const [longitude, setLongitude] = useState("0");
   const [serviceRangeKm, setServiceRangeKm] = useState("10");
+  const [perKmCharge, setPerKmCharge] = useState("0");
   const [email, setEmail] = useState("");
 
   // Password change state
@@ -114,6 +115,7 @@ export default function LabSettings() {
         setLatitude(String(b.latitude || 0));
         setLongitude(String(b.longitude || 0));
         setServiceRangeKm(String(b.serviceRangeKm || 10));
+        setPerKmCharge(String(b.perKmCharge || 0));
         setEmail(profileRes.data.data.labUser?.email || "");
       } else {
         toast.error("Failed to load branch profile details.");
@@ -159,6 +161,7 @@ export default function LabSettings() {
         latitude: Number(latitude) || 0,
         longitude: Number(longitude) || 0,
         serviceRangeKm: Number(serviceRangeKm) || 10,
+        perKmCharge: Number(perKmCharge) || 0,
       },
       requireAuth: true,
     });
@@ -466,7 +469,7 @@ export default function LabSettings() {
                       size="small"
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
                     <TextField
                       label="Latitude"
                       value={latitude}
@@ -477,7 +480,7 @@ export default function LabSettings() {
                       helperText="Please select location on map"
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
                     <TextField
                       label="Longitude"
                       value={longitude}
@@ -488,11 +491,21 @@ export default function LabSettings() {
                       helperText="Please select location on map"
                     />
                   </Grid>
-                  <Grid size={{ xs: 12, sm: 4 }}>
+                  <Grid size={{ xs: 12, sm: 3 }}>
                     <TextField
                       label="Service Range (Km)"
                       value={serviceRangeKm}
                       onChange={(e) => setServiceRangeKm(e.target.value)}
+                      fullWidth
+                      required
+                      size="small"
+                    />
+                  </Grid>
+                  <Grid size={{ xs: 12, sm: 3 }}>
+                    <TextField
+                      label="Per Km Charge (₹)"
+                      value={perKmCharge}
+                      onChange={(e) => setPerKmCharge(e.target.value)}
                       fullWidth
                       required
                       size="small"

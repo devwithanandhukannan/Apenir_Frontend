@@ -389,6 +389,64 @@ export function useStaffService() {
     [get],
   );
 
+  // Get all services and packages available for this branch
+  const getAppointmentBranchServices = useCallback(
+    async (
+      appointmentId: string,
+      options?: Omit<BaseRequestOptions<any>, "endpoint" | "requireAuth">,
+    ) => {
+      const response = await get<any>({
+        endpoint: `/api/staff/appointments/${appointmentId}/services`,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
+  // Search existing customer profiles or past patient records by phone number
+  const searchMembersByPhone = useCallback(
+    async (
+      phone: string,
+      options?: Omit<BaseRequestOptions<any>, "endpoint" | "requireAuth">,
+    ) => {
+      const response = await get<any>({
+        endpoint: `/api/staff/members/search?phone=${encodeURIComponent(phone)}`,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
   return {
     getStaff,
     getMyAppointments,
@@ -398,6 +456,8 @@ export function useStaffService() {
     registerMemberProfile,
     getStaffStats,
     getAppointmentMembers,
+    getAppointmentBranchServices,
+    searchMembersByPhone,
   };
 }
 
