@@ -95,11 +95,11 @@ function formatTime(t: string | null) {
 }
 
 const COLLECTION_STEPS = [
-  "Mark Departed",
-  "Mark Arrived",
-  "Verify OTP",
-  "Add Members & Take Test",
-  "Handover to Lab",
+  "Departed",
+  "Arrived",
+  "OTP Verified",
+  "Testing",
+  "Handover",
 ];
 
 export default function StaffAppointmentsPage() {
@@ -804,17 +804,18 @@ export default function StaffAppointmentsPage() {
     };
 
     // Sequential Active step tracker for Stepper UI
-    let activeStep = 0;
-    if (selected.status === 7) activeStep = 1; // Departed
-    if (selected.status === 8) activeStep = 2; // Reached
-    if (selected.status === 9) activeStep = 3; // OTP Verified
+    // 0=Departed, 1=Arrived, 2=OTP Verified, 3=Testing, 4=Handover
+    let activeStep = -1; // before depart
+    if (selected.status === 7) activeStep = 0; // Coming/Departed
+    if (selected.status === 8) activeStep = 1; // Reached/Arrived
+    if (selected.status === 9) activeStep = 2; // OTP Verified
     if (selected.status === 10) activeStep = 3; // Taking Test
     if (
       selected.status === 4 ||
       selected.status === 11 ||
       selected.status === 5
     )
-      activeStep = 5; // Collected / Handover
+      activeStep = 5; // Collected / Handover / Completed
 
     return renderMobileShell(
       <Box sx={{ pb: 6 }}>
@@ -1030,30 +1031,33 @@ export default function StaffAppointmentsPage() {
             >
               <CardContent>
                 <Typography variant="subtitle2" sx={{ fontWeight: 750, mb: 2 }}>
-                  Sequential Action Pipeline
+                  Action Pipeline
                 </Typography>
 
                 <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-                  {/* Step 1: Mark Departed */}
-                  {selected.status <= 3 && (
+                  {/* Step 1: Mark Departed — visible for Pending/Confirmed/Assigned */}
+                  {[1, 2, 3].includes(selected.status) && (
                     <Button
                       variant="contained"
-                      startIcon={<DirectionsBikeIcon />}
+                      startIcon={
+                        actionLoading ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <DirectionsBikeIcon />
+                        )
+                      }
                       onClick={() => handleStatusUpdate("coming")}
                       disabled={actionLoading}
                       fullWidth
                       sx={{
                         fontWeight: 700,
-                        py: 1.2,
+                        py: 1.4,
                         textTransform: "none",
-                        borderRadius: "8px",
+                        borderRadius: "10px",
+                        fontSize: "0.95rem",
                       }}
                     >
-                      {actionLoading ? (
-                        <CircularProgress size={16} color="inherit" />
-                      ) : (
-                        "Mark Departed"
-                      )}
+                      🚴 I&apos;m On My Way
                     </Button>
                   )}
 
@@ -1062,22 +1066,25 @@ export default function StaffAppointmentsPage() {
                     <Button
                       variant="contained"
                       color="secondary"
-                      startIcon={<LocationOnIcon />}
+                      startIcon={
+                        actionLoading ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <LocationOnIcon />
+                        )
+                      }
                       onClick={() => handleStatusUpdate("reached")}
                       disabled={actionLoading}
                       fullWidth
                       sx={{
                         fontWeight: 700,
-                        py: 1.2,
+                        py: 1.4,
                         textTransform: "none",
-                        borderRadius: "8px",
+                        borderRadius: "10px",
+                        fontSize: "0.95rem",
                       }}
                     >
-                      {actionLoading ? (
-                        <CircularProgress size={16} color="inherit" />
-                      ) : (
-                        "Mark Arrived"
-                      )}
+                      📍 I Have Arrived
                     </Button>
                   )}
 
@@ -1092,17 +1099,18 @@ export default function StaffAppointmentsPage() {
                       fullWidth
                       sx={{
                         fontWeight: 700,
-                        py: 1.2,
+                        py: 1.4,
                         textTransform: "none",
-                        borderRadius: "8px",
+                        borderRadius: "10px",
+                        fontSize: "0.95rem",
                       }}
                     >
-                      Verify Patient OTP
+                      🔑 Verify OTP Passcode
                     </Button>
                   )}
 
-                  {/* Step 4: Add details / Edit member details */}
-                  {selected.status === 9 && (
+                  {/* Step 4: Add member details (status 9) OR Edit member details (status 10) */}
+                  {(selected.status === 9 || selected.status === 10) && (
                     <Button
                       variant="contained"
                       color="primary"
@@ -1118,34 +1126,44 @@ export default function StaffAppointmentsPage() {
                       fullWidth
                       sx={{
                         fontWeight: 700,
-                        py: 1.2,
+                        py: 1.4,
                         textTransform: "none",
-                        borderRadius: "8px",
+                        borderRadius: "10px",
+                        fontSize: "0.95rem",
                       }}
                     >
                       {loadingMembers
-                        ? "Loading Members..."
-                        : "Add Test & Member Details"}
+                        ? "Loading..."
+                        : selected.status === 10
+                          ? "✏️ Edit Member & Test Info"
+                          : "📋 Add Member & Test Info"}
                     </Button>
                   )}
 
-                  {/* Step 5: Test in progress */}
+                  {/* Step 5: Collect samples (status 10 only, shown alongside Edit button) */}
                   {selected.status === 10 && (
                     <Button
                       variant="contained"
                       color="success"
-                      startIcon={<CheckCircleIcon />}
+                      startIcon={
+                        actionLoading ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <CheckCircleIcon />
+                        )
+                      }
                       onClick={() => handleStatusUpdate("collect")}
                       disabled={actionLoading}
                       fullWidth
                       sx={{
                         fontWeight: 700,
-                        py: 1.2,
+                        py: 1.4,
                         textTransform: "none",
-                        borderRadius: "8px",
+                        borderRadius: "10px",
+                        fontSize: "0.95rem",
                       }}
                     >
-                      Complete Test & Collect Samples
+                      ✅ Samples Collected
                     </Button>
                   )}
 
@@ -1154,33 +1172,40 @@ export default function StaffAppointmentsPage() {
                     <Button
                       variant="contained"
                       color="success"
-                      startIcon={<CheckCircleIcon />}
+                      startIcon={
+                        actionLoading ? (
+                          <CircularProgress size={16} color="inherit" />
+                        ) : (
+                          <CheckCircleIcon />
+                        )
+                      }
                       onClick={() => handleStatusUpdate("handover")}
                       disabled={actionLoading}
                       fullWidth
                       sx={{
                         fontWeight: 700,
-                        py: 1.2,
+                        py: 1.4,
                         textTransform: "none",
-                        borderRadius: "8px",
+                        borderRadius: "10px",
+                        fontSize: "0.95rem",
                       }}
                     >
-                      {actionLoading ? (
-                        <CircularProgress size={16} color="inherit" />
-                      ) : (
-                        "Handover Samples to Lab"
-                      )}
+                      🏥 Handover to Lab
                     </Button>
                   )}
 
-                  {/* Step 7: Completed State */}
+                  {/* Completed State */}
                   {(selected.status === 11 || selected.status === 5) && (
                     <Alert
                       severity="success"
-                      sx={{ width: "100%", borderRadius: "8px" }}
+                      sx={{
+                        width: "100%",
+                        borderRadius: "10px",
+                        fontWeight: 600,
+                      }}
                     >
-                      Samples collected and handed over successfully. Awaiting
-                      test report upload by the Lab Owner.
+                      ✅ Samples collected and handed over successfully.
+                      Awaiting report upload by the Lab.
                     </Alert>
                   )}
                 </Box>
@@ -1659,6 +1684,8 @@ export default function StaffAppointmentsPage() {
             >
               {memberSaving ? (
                 <CircularProgress size={16} color="inherit" />
+              ) : selected?.status === 10 ? (
+                "Update Member Details"
               ) : (
                 "Save & Start Test"
               )}

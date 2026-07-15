@@ -69,6 +69,35 @@ interface EligibleLab {
   baseTotal: number;
   travelFee: number;
   grandTotal: number;
+  isMultiLab?: boolean;
+}
+
+interface LabSplitEntry {
+  branchId: string;
+  name: string;
+  city: string;
+  district?: string;
+  roadDistance: number;
+  travelFee: number;
+  assignedItemIds: string[];
+  assignedItemNames: string[];
+  baseTotal: number;
+  grandTotal: number;
+}
+
+interface SplitSuggestion {
+  labs: LabSplitEntry[];
+  totalBase: number;
+  totalTravel: number;
+  grandTotal: number;
+  uncoveredItemIds?: string[];
+  uncoveredItemNames?: string[];
+}
+
+interface EligibleLabsResponse {
+  eligibleLabs: EligibleLab[];
+  splitSuggestion: SplitSuggestion | null;
+  hasSingleLabOption: boolean;
 }
 
 interface SlotItem {
@@ -80,6 +109,21 @@ interface SlotItem {
   bookedCount: number;
   maxCapacity: number;
   branchId: string;
+}
+
+interface RegionAvailabilityResult {
+  branchId: string;
+  name: string;
+  city: string;
+  district?: string;
+  distance: number;
+  servicesAvailableCount: number;
+  servicesRequestedCount: number;
+  servicesCoveredCount: number;
+  isFullyEligible: boolean;
+  hasAvailableSlotsToday: boolean;
+  nextAvailableSlotDate?: string;
+  nextAvailableSlotTime?: string;
 }
 
 type ApiResponse<T> = {
@@ -157,7 +201,7 @@ function getMemberSlotTimes(
 
 export default function CustomerBookPage() {
   const router = useRouter();
-  const { get } = useApi();
+  const { get, post } = useApi();
   const { bookAppointment } = useCustomerService();
 
   const [step, setStep] = useState(0);
@@ -180,8 +224,21 @@ export default function CustomerBookPage() {
 
   // Step 3: Labs List
   const [eligibleLabs, setEligibleLabs] = useState<EligibleLab[]>([]);
+  const [splitSuggestion, setSplitSuggestion] =
+    useState<SplitSuggestion | null>(null);
   const [labsLoading, setLabsLoading] = useState(false);
   const [selectedLab, setSelectedLab] = useState<EligibleLab | null>(null);
+  // Multi-lab: track which slot was chosen for each sub-lab
+  const [splitSlots, setSplitSlots] = useState<Record<string, SlotItem | null>>(
+    {},
+  );
+  const [splitSlotsData, setSplitSlotsData] = useState<
+    Record<string, SlotItem[]>
+  >({});
+  const [splitSlotsLoading, setSplitSlotsLoading] = useState<
+    Record<string, boolean>
+  >({});
+  const [usingSplitMode, setUsingSplitMode] = useState(false);
 
   // Step 4: Slots & Member Count
   const [slots, setSlots] = useState<SlotItem[]>([]);
@@ -214,6 +271,41 @@ export default function CustomerBookPage() {
   const [bookedApptNumber, setBookedApptNumber] = useState("");
   const [bookedPasscode, setBookedPasscode] = useState("");
   const [bookedAddress, setBookedAddress] = useState("");
+
+  // Region availability (real-time indicator on Step 0)
+  const [regionAvail, setRegionAvail] = useState<{
+    loading: boolean;
+    labs: RegionAvailabilityResult[];
+    error: string | null;
+  }>({ loading: false, labs: [], error: null });
+
+  // Debounced region-availability check when user moves the map pin
+  useEffect(() => {
+    if (!latitude || !longitude) return;
+    const timer = setTimeout(async () => {
+      setRegionAvail((prev) => ({ ...prev, loading: true, error: null }));
+      try {
+        const itemIds = cart.map((c) => c.id).join(",");
+        const params = `latitude=${latitude}&longitude=${longitude}${itemIds ? `&itemIds=${itemIds}` : ""}`;
+        const res = await fetch(
+          `${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/appointments/region-availability?${params}`,
+        );
+        const json: ApiResponse<RegionAvailabilityResult[]> = await res.json();
+        if (json.success) {
+          setRegionAvail({
+            loading: false,
+            labs: json.data ?? [],
+            error: null,
+          });
+        } else {
+          setRegionAvail({ loading: false, labs: [], error: null });
+        }
+      } catch {
+        setRegionAvail({ loading: false, labs: [], error: null });
+      }
+    }, 800); // 800ms debounce
+    return () => clearTimeout(timer);
+  }, [latitude, longitude, cart]);
 
   // Load diagnostic items (Services & Packages)
   const loadCatalog = useCallback(async () => {
@@ -251,13 +343,17 @@ export default function CustomerBookPage() {
     if (!latitude || !longitude || cart.length === 0) return;
     setLabsLoading(true);
     setSelectedLab(null);
+    setSplitSuggestion(null);
+    setUsingSplitMode(false);
     setError(null);
     const itemIds = cart.map((item) => item.id).join(",");
-    await get<ApiResponse<EligibleLab[]>>({
+    await get<ApiResponse<EligibleLabsResponse>>({
       endpoint: `/api/appointments/eligible-labs?latitude=${latitude}&longitude=${longitude}&itemIds=${itemIds}`,
       requireAuth: true,
       onSuccess: (res) => {
-        setEligibleLabs(res.data ?? []);
+        const data = res.data;
+        setEligibleLabs(data?.eligibleLabs ?? []);
+        setSplitSuggestion(data?.splitSuggestion ?? null);
         setLabsLoading(false);
       },
       onError: (err) => {
@@ -269,6 +365,39 @@ export default function CustomerBookPage() {
       },
     });
   }, [get, latitude, longitude, cart]);
+
+  // Load slots for a specific branch (used for both single-lab and each split sub-lab)
+  const loadSplitSlots = useCallback(
+    async (branchId: string) => {
+      setSplitSlotsLoading((prev) => ({ ...prev, [branchId]: true }));
+      await get<ApiResponse<SlotItem[]>>({
+        endpoint: `/api/appointments/slots/branch/${branchId}`,
+        requireAuth: true,
+        onSuccess: (res) => {
+          setSplitSlotsData((prev) => ({
+            ...prev,
+            [branchId]: res.data ?? [],
+          }));
+          setSplitSlotsLoading((prev) => ({ ...prev, [branchId]: false }));
+        },
+        onError: () => {
+          setSplitSlotsLoading((prev) => ({ ...prev, [branchId]: false }));
+        },
+      });
+    },
+    [get],
+  );
+
+  // When entering split mode, preload slots for all split labs
+  useEffect(() => {
+    if (usingSplitMode && splitSuggestion) {
+      splitSuggestion.labs.forEach((lab) => {
+        if (!splitSlotsData[lab.branchId]) {
+          loadSplitSlots(lab.branchId);
+        }
+      });
+    }
+  }, [usingSplitMode, splitSuggestion, splitSlotsData, loadSplitSlots]);
 
   useEffect(() => {
     if (step === 2) {
@@ -312,50 +441,104 @@ export default function CustomerBookPage() {
   };
 
   const handleBook = async () => {
-    if (
-      !selectedLab ||
-      !selectedSlot ||
-      !latitude ||
-      !longitude ||
-      cart.length === 0
-    )
-      return;
-    setBooking(true);
-    setError(null);
-    const payload = {
-      latitude,
-      longitude,
-      itemIds: cart.map((c) => c.id),
-      slotId: selectedSlot.id,
-      memberCount,
-      buildingDetails: building,
-      landmark,
-      floor,
-      memberSelections: memberSelections.map((ms) => ({
-        name: ms.name,
-        itemIds: ms.itemIds,
-      })),
-    };
-    await bookAppointment(payload, {
-      onSuccess: (res) => {
-        setBooking(false);
-        if (res.data && (res.data as any).paymentUrl) {
-          window.location.href = (res.data as any).paymentUrl;
-        } else {
-          setBooked(true);
-          setBookedApptNumber(res.data?.appointmentNumber ?? "");
-          setBookedPasscode(res.data?.passcode ?? "");
-          setBookedAddress(res.data?.locationAddress ?? "");
-        }
-      },
-      onError: (err) => {
-        setBooking(false);
+    if (!latitude || !longitude || cart.length === 0) return;
+
+    if (usingSplitMode) {
+      if (!splitSuggestion) return;
+      const allSelected = splitSuggestion.labs.every(
+        (lab) => splitSlots[lab.branchId],
+      );
+      if (!allSelected) {
         setError(
-          err?.message ??
-            "Booking failed. You may be outside the service area for this lab.",
+          "Please choose slot timings for all laboratories in the split.",
         );
-      },
-    });
+        return;
+      }
+
+      setBooking(true);
+      setError(null);
+
+      const splitPayload = {
+        latitude,
+        longitude,
+        buildingDetails: building,
+        landmark,
+        floor,
+        memberCount,
+        labSplits: splitSuggestion.labs.map((lab) => ({
+          branchId: lab.branchId,
+          slotId: splitSlots[lab.branchId]!.id,
+          itemIds: lab.assignedItemIds,
+        })),
+        memberSelections: memberSelections.map((ms) => ({
+          name: ms.name,
+          itemIds: ms.itemIds,
+        })),
+      };
+
+      await post<ApiResponse<any>, any>({
+        endpoint: "/api/appointments/book-multi-lab",
+        body: splitPayload,
+        requireAuth: true,
+        onSuccess: (res) => {
+          setBooking(false);
+          if (res.data && res.data.paymentUrl) {
+            window.location.href = res.data.paymentUrl;
+          } else {
+            setBooked(true);
+            setBookedApptNumber(res.data?.bookingId ?? "");
+            setBookedPasscode(res.data?.passcode ?? "");
+            setBookedAddress(
+              `${building}, Floor: ${floor}, Landmark: ${landmark}`,
+            );
+          }
+        },
+        onError: (err) => {
+          setBooking(false);
+          setError(
+            err?.message ?? "Failed to book split multi-lab appointments.",
+          );
+        },
+      });
+    } else {
+      if (!selectedLab || !selectedSlot) return;
+      setBooking(true);
+      setError(null);
+      const payload = {
+        latitude,
+        longitude,
+        itemIds: cart.map((c) => c.id),
+        slotId: selectedSlot.id,
+        memberCount,
+        buildingDetails: building,
+        landmark,
+        floor,
+        memberSelections: memberSelections.map((ms) => ({
+          name: ms.name,
+          itemIds: ms.itemIds,
+        })),
+      };
+      await bookAppointment(payload, {
+        onSuccess: (res) => {
+          setBooking(false);
+          if (res.data && (res.data as any).paymentUrl) {
+            window.location.href = (res.data as any).paymentUrl;
+          } else {
+            setBooked(true);
+            setBookedApptNumber(res.data?.appointmentNumber ?? "");
+            setBookedPasscode(res.data?.passcode ?? "");
+            setBookedAddress(res.data?.locationAddress ?? "");
+          }
+        },
+        onError: (err) => {
+          setBooking(false);
+          setError(
+            err?.message ??
+              "Booking failed. You may be outside the service area for this lab.",
+          );
+        },
+      });
+    }
   };
 
   // Split prices calculation
@@ -378,9 +561,20 @@ export default function CustomerBookPage() {
     (sum, m) => sum + m.discount,
     0,
   );
-  const travelFee = selectedLab?.travelFee ?? 0;
+
+  const splitTravelFee =
+    usingSplitMode && splitSuggestion
+      ? splitSuggestion.labs.reduce((sum, lab) => sum + lab.travelFee, 0)
+      : 0;
+
+  const travelFee = usingSplitMode
+    ? splitTravelFee
+    : (selectedLab?.travelFee ?? 0);
+
   const grandTotal =
-    memberTotals.reduce((sum, m) => sum + m.finalAmount, 0) + travelFee;
+    usingSplitMode && splitSuggestion
+      ? Math.round(splitSuggestion.grandTotal)
+      : memberTotals.reduce((sum, m) => sum + m.finalAmount, 0) + travelFee;
 
   if (booked) {
     return (
@@ -585,6 +779,76 @@ export default function CustomerBookPage() {
             </Grid>
 
             <Box sx={{ display: "flex", justifyContent: "flex-end", mt: 4 }}>
+              {/* Region Availability Indicator */}
+              {latitude && longitude && (
+                <Box sx={{ flex: 1, mr: 2 }}>
+                  {regionAvail.loading ? (
+                    <Alert
+                      icon={<CircularProgress size={16} />}
+                      severity="info"
+                      sx={{ py: 0.5, fontWeight: 600 }}
+                    >
+                      Checking labs in your area...
+                    </Alert>
+                  ) : regionAvail.labs.length === 0 ? (
+                    <Alert severity="error" sx={{ py: 0.5, fontWeight: 600 }}>
+                      🔴 No labs available in your area yet.
+                    </Alert>
+                  ) : (
+                    (() => {
+                      const eligible = regionAvail.labs.filter(
+                        (l) => l.isFullyEligible,
+                      );
+                      const withToday = eligible.filter(
+                        (l) => l.hasAvailableSlotsToday,
+                      );
+                      const nearby = regionAvail.labs.filter(
+                        (l) => !l.isFullyEligible,
+                      );
+                      return (
+                        <Alert
+                          severity={
+                            withToday.length > 0
+                              ? "success"
+                              : eligible.length > 0
+                                ? "warning"
+                                : "info"
+                          }
+                          sx={{ py: 0.5, fontWeight: 600 }}
+                        >
+                          {withToday.length > 0 && (
+                            <>
+                              🟢{" "}
+                              <strong>
+                                {withToday.length} lab
+                                {withToday.length > 1 ? "s" : ""}
+                              </strong>{" "}
+                              available with slots today
+                            </>
+                          )}
+                          {withToday.length === 0 && eligible.length > 0 && (
+                            <>
+                              🟡{" "}
+                              <strong>
+                                {eligible.length} lab
+                                {eligible.length > 1 ? "s" : ""}
+                              </strong>{" "}
+                              found — next slot:{" "}
+                              {eligible[0]?.nextAvailableSlotDate ?? "TBD"}
+                            </>
+                          )}
+                          {eligible.length === 0 && nearby.length > 0 && (
+                            <>
+                              🟠 Nearby labs found but don&apos;t offer all
+                              selected services
+                            </>
+                          )}
+                        </Alert>
+                      );
+                    })()
+                  )}
+                </Box>
+              )}
               <Button
                 variant="contained"
                 disabled={!latitude || !longitude || !building}
@@ -901,97 +1165,403 @@ export default function CustomerBookPage() {
         {/* STEP 3: CHOOSE LAB */}
         {step === 2 && (
           <Box>
-            <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
-              Available Laboratories offering all selected services nearby:
-            </Typography>
+            {/* Single-lab section */}
+            {!usingSplitMode && (
+              <>
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
+                  Available Laboratories offering all selected services nearby:
+                </Typography>
 
-            {labsLoading ? (
-              <Grid container spacing={2}>
-                {[1, 2].map((i) => (
-                  <Grid size={{ xs: 12 }} key={i}>
-                    <Skeleton variant="rounded" height={100} />
+                {labsLoading ? (
+                  <Grid container spacing={2}>
+                    {[1, 2].map((i) => (
+                      <Grid size={{ xs: 12 }} key={i}>
+                        <Skeleton variant="rounded" height={100} />
+                      </Grid>
+                    ))}
                   </Grid>
-                ))}
-              </Grid>
-            ) : eligibleLabs.length === 0 ? (
-              <Alert severity="warning">
-                We are sorry, but no laboratory branches offering these services
-                are available within range of your current location. Please
-                update your cart items or choose a different location.
-              </Alert>
-            ) : (
-              <Grid container spacing={2}>
-                {eligibleLabs.map((lab) => (
-                  <Grid size={{ xs: 12 }} key={lab.branchId}>
+                ) : eligibleLabs.length === 0 && !splitSuggestion ? (
+                  <Alert severity="warning">
+                    We are sorry, but no laboratory branches offering these
+                    services are available within range of your current
+                    location. Please update your cart items or choose a
+                    different location.
+                  </Alert>
+                ) : eligibleLabs.length === 0 && splitSuggestion ? (
+                  /* No single lab covers everything — show split suggestion */
+                  <Box>
+                    <Alert
+                      severity="info"
+                      sx={{ mb: 2, borderRadius: 2, fontWeight: 500 }}
+                      icon={<span>🔬</span>}
+                    >
+                      <strong>
+                        No single lab offers all your selected services
+                      </strong>{" "}
+                      in your area. We found a{" "}
+                      <strong>Multi-Lab solution</strong> — different labs will
+                      each handle part of your tests, collected in one visit per
+                      lab.
+                    </Alert>
+
                     <Card
                       elevation={0}
                       sx={{
-                        border: "1.5px solid",
-                        borderColor:
-                          selectedLab?.branchId === lab.branchId
-                            ? "primary.main"
-                            : "divider",
-                        transition: "border-color 0.2s, box-shadow 0.2s",
-                        "&:hover": { borderColor: "primary.main" },
+                        border: "2px solid",
+                        borderColor: "primary.main",
+                        borderRadius: 3,
+                        mb: 2,
+                        background:
+                          "linear-gradient(135deg, rgba(25,118,210,0.04) 0%, rgba(255,255,255,1) 100%)",
                       }}
                     >
-                      <CardActionArea
-                        onClick={() => setSelectedLab(lab)}
-                        sx={{ p: 0 }}
-                      >
-                        <CardContent
+                      <CardContent>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            alignItems: "center",
+                            gap: 1,
+                            mb: 2,
+                          }}
+                        >
+                          <span style={{ fontSize: 22 }}>🏥</span>
+                          <Typography
+                            variant="subtitle1"
+                            sx={{ fontWeight: 700 }}
+                          >
+                            Split Booking — {splitSuggestion.labs.length} Labs
+                          </Typography>
+                          <Chip
+                            label={`Total ₹${Math.round(splitSuggestion.grandTotal)}`}
+                            color="primary"
+                            size="small"
+                            sx={{ ml: "auto", fontWeight: 700, fontSize: 13 }}
+                          />
+                        </Box>
+
+                        {splitSuggestion.labs.map((lab, idx) => (
+                          <Box
+                            key={lab.branchId}
+                            sx={{
+                              p: 2,
+                              mb: 1.5,
+                              borderRadius: 2,
+                              border: "1px solid",
+                              borderColor: "divider",
+                              background: "#fafafa",
+                            }}
+                          >
+                            <Box
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "flex-start",
+                                mb: 1,
+                              }}
+                            >
+                              <Box>
+                                <Typography
+                                  variant="body2"
+                                  sx={{ fontWeight: 700 }}
+                                >
+                                  🏨 Lab {idx + 1}: {lab.name}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  {lab.city}
+                                  {lab.district
+                                    ? `, ${lab.district}`
+                                    : ""} · {lab.roadDistance.toFixed(1)} km
+                                  road
+                                </Typography>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography
+                                  variant="body2"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: "primary.main",
+                                  }}
+                                >
+                                  ₹{Math.round(lab.grandTotal)}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  +₹{Math.round(lab.travelFee)} travel
+                                </Typography>
+                              </Box>
+                            </Box>
+
+                            <Box
+                              sx={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 0.5,
+                                mb: 1.5,
+                              }}
+                            >
+                              {lab.assignedItemNames.map((name) => (
+                                <Chip
+                                  key={name}
+                                  label={name}
+                                  size="small"
+                                  sx={{ fontSize: 11, background: "#e3f2fd" }}
+                                />
+                              ))}
+                            </Box>
+
+                            {/* Slot picker for this sub-lab */}
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                fontWeight: 600,
+                                mb: 0.5,
+                                display: "block",
+                              }}
+                            >
+                              📅 Choose a slot for this lab:
+                            </Typography>
+                            {splitSlotsLoading[lab.branchId] ? (
+                              <Skeleton variant="rounded" height={36} />
+                            ) : (
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  flexWrap: "wrap",
+                                  gap: 0.5,
+                                }}
+                              >
+                                {(splitSlotsData[lab.branchId] ?? [])
+                                  .slice(0, 6)
+                                  .map((slot) => (
+                                    <Chip
+                                      key={slot.id}
+                                      label={`${formatDate(slot.slotDate)} ${formatTime(slot.startTime)}`}
+                                      size="small"
+                                      color={
+                                        splitSlots[lab.branchId]?.id === slot.id
+                                          ? "primary"
+                                          : "default"
+                                      }
+                                      variant={
+                                        splitSlots[lab.branchId]?.id === slot.id
+                                          ? "filled"
+                                          : "outlined"
+                                      }
+                                      onClick={() =>
+                                        setSplitSlots((prev) => ({
+                                          ...prev,
+                                          [lab.branchId]: slot,
+                                        }))
+                                      }
+                                      sx={{ cursor: "pointer", fontSize: 11 }}
+                                    />
+                                  ))}
+                                {(splitSlotsData[lab.branchId] ?? []).length ===
+                                  0 && (
+                                  <Typography variant="caption" color="error">
+                                    No slots available
+                                  </Typography>
+                                )}
+                              </Box>
+                            )}
+                          </Box>
+                        ))}
+
+                        {splitSuggestion.uncoveredItemNames &&
+                          splitSuggestion.uncoveredItemNames.length > 0 && (
+                            <Alert severity="warning" sx={{ mt: 1 }}>
+                              ⚠️ These services are not available in any nearby
+                              lab:{" "}
+                              <strong>
+                                {splitSuggestion.uncoveredItemNames.join(", ")}
+                              </strong>
+                            </Alert>
+                          )}
+
+                        <Box
                           sx={{
                             display: "flex",
                             justifyContent: "space-between",
-                            alignItems: "center",
-                            py: 2,
+                            mt: 2,
+                            pt: 2,
+                            borderTop: "1px solid",
+                            borderColor: "divider",
                           }}
                         >
-                          <Box
-                            sx={{
-                              display: "flex",
-                              gap: 1.5,
-                              alignItems: "center",
-                            }}
-                          >
-                            <StorefrontIcon color="primary" />
-                            <Box>
-                              <Typography
-                                variant="body2"
-                                sx={{ fontWeight: 700 }}
-                              >
-                                {lab.name}
-                              </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
-                              >
-                                {lab.city}, {lab.district} ·{" "}
-                                {lab.distance.toFixed(1)} km (straight-line) ·{" "}
-                                {lab.roadDistance.toFixed(1)} km (road)
-                              </Typography>
-                            </Box>
-                          </Box>
-                          <Box sx={{ textAlign: "right" }}>
-                            <Typography
-                              variant="body1"
-                              sx={{ fontWeight: 800, color: "primary.main" }}
-                            >
-                              ₹{lab.grandTotal}
-                            </Typography>
+                          <Box>
                             <Typography
                               variant="caption"
                               color="text.secondary"
                             >
-                              Base ₹{lab.baseTotal} + Travel ₹{lab.travelFee}
+                              Base: ₹{Math.round(splitSuggestion.totalBase)}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ ml: 1 }}
+                            >
+                              Travel: ₹{Math.round(splitSuggestion.totalTravel)}
                             </Typography>
                           </Box>
-                        </CardContent>
-                      </CardActionArea>
+                          <Button
+                            variant="contained"
+                            size="small"
+                            disabled={splitSuggestion.labs.some(
+                              (lab) => !splitSlots[lab.branchId],
+                            )}
+                            onClick={() => setUsingSplitMode(true)}
+                            sx={{ fontWeight: 700 }}
+                          >
+                            Confirm Split Booking →
+                          </Button>
+                        </Box>
+                      </CardContent>
                     </Card>
+                  </Box>
+                ) : (
+                  <Grid container spacing={2}>
+                    {eligibleLabs.map((lab) => (
+                      <Grid size={{ xs: 12 }} key={lab.branchId}>
+                        <Card
+                          elevation={0}
+                          sx={{
+                            border: "1.5px solid",
+                            borderColor:
+                              selectedLab?.branchId === lab.branchId
+                                ? "primary.main"
+                                : "divider",
+                            transition: "border-color 0.2s, box-shadow 0.2s",
+                            "&:hover": { borderColor: "primary.main" },
+                          }}
+                        >
+                          <CardActionArea
+                            onClick={() => setSelectedLab(lab)}
+                            sx={{ p: 0 }}
+                          >
+                            <CardContent
+                              sx={{
+                                display: "flex",
+                                justifyContent: "space-between",
+                                alignItems: "center",
+                                py: 2,
+                              }}
+                            >
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  gap: 1.5,
+                                  alignItems: "center",
+                                }}
+                              >
+                                <StorefrontIcon color="primary" />
+                                <Box>
+                                  <Typography
+                                    variant="body2"
+                                    sx={{ fontWeight: 700 }}
+                                  >
+                                    {lab.name}
+                                  </Typography>
+                                  <Typography
+                                    variant="caption"
+                                    color="text.secondary"
+                                  >
+                                    {lab.city}, {lab.district} ·{" "}
+                                    {lab.distance.toFixed(1)} km (straight-line)
+                                    · {lab.roadDistance.toFixed(1)} km (road)
+                                  </Typography>
+                                </Box>
+                              </Box>
+                              <Box sx={{ textAlign: "right" }}>
+                                <Typography
+                                  variant="body1"
+                                  sx={{
+                                    fontWeight: 800,
+                                    color: "primary.main",
+                                  }}
+                                >
+                                  ₹{lab.grandTotal}
+                                </Typography>
+                                <Typography
+                                  variant="caption"
+                                  color="text.secondary"
+                                >
+                                  Base ₹{lab.baseTotal} + Travel ₹
+                                  {lab.travelFee}
+                                </Typography>
+                              </Box>
+                            </CardContent>
+                          </CardActionArea>
+                        </Card>
+                      </Grid>
+                    ))}
                   </Grid>
+                )}
+              </>
+            )}
+
+            {/* Split mode confirmed — summary banner */}
+            {usingSplitMode && splitSuggestion && (
+              <Box>
+                <Alert severity="success" sx={{ mb: 2 }} icon={<span>✅</span>}>
+                  <strong>Multi-Lab booking ready!</strong> Your tests have been
+                  distributed across {splitSuggestion.labs.length} labs. One
+                  shared passcode will be used across all labs.
+                </Alert>
+                {splitSuggestion.labs.map((lab, idx) => (
+                  <Card
+                    key={lab.branchId}
+                    elevation={0}
+                    sx={{
+                      border: "1px solid",
+                      borderColor: "success.light",
+                      mb: 1.5,
+                      borderRadius: 2,
+                    }}
+                  >
+                    <CardContent sx={{ py: 1.5 }}>
+                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                        Lab {idx + 1}: {lab.name}
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Slot:{" "}
+                        {splitSlots[lab.branchId]
+                          ? `${formatDate(splitSlots[lab.branchId]!.slotDate)} @ ${formatTime(splitSlots[lab.branchId]!.startTime)}`
+                          : "—"}
+                      </Typography>
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexWrap: "wrap",
+                          gap: 0.5,
+                          mt: 0.5,
+                        }}
+                      >
+                        {lab.assignedItemNames.map((n) => (
+                          <Chip
+                            key={n}
+                            label={n}
+                            size="small"
+                            sx={{ fontSize: 11 }}
+                          />
+                        ))}
+                      </Box>
+                    </CardContent>
+                  </Card>
                 ))}
-              </Grid>
+                <Button
+                  variant="outlined"
+                  size="small"
+                  onClick={() => setUsingSplitMode(false)}
+                  sx={{ mt: 1 }}
+                >
+                  ← Change Lab Selection
+                </Button>
+              </Box>
             )}
 
             <Box
@@ -1009,14 +1579,26 @@ export default function CustomerBookPage() {
               >
                 Back
               </Button>
-              <Button
-                variant="contained"
-                disabled={!selectedLab}
-                onClick={() => setStep(3)}
-                sx={{ fontWeight: 700 }}
-              >
-                Choose Slot & Members
-              </Button>
+              {!usingSplitMode && (
+                <Button
+                  variant="contained"
+                  disabled={!selectedLab}
+                  onClick={() => setStep(3)}
+                  sx={{ fontWeight: 700 }}
+                >
+                  Choose Slot & Members
+                </Button>
+              )}
+              {usingSplitMode && (
+                <Button
+                  variant="contained"
+                  color="success"
+                  onClick={() => setStep(4)}
+                  sx={{ fontWeight: 700 }}
+                >
+                  Review & Pay →
+                </Button>
+              )}
             </Box>
           </Box>
         )}
@@ -1166,106 +1748,252 @@ export default function CustomerBookPage() {
               </Grid>
             </Grid>
 
-            {/* Granular member selection */}
-            <Box sx={{ mt: 3 }}>
-              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 1 }}>
-                Configure Test Selections per Person
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ display: "block", mb: 2 }}
+            {/* Member × Service matrix */}
+            <Box
+              sx={{
+                mt: 3,
+                border: "1px solid",
+                borderColor: "divider",
+                borderRadius: "10px",
+                overflow: "hidden",
+              }}
+            >
+              {/* Matrix header */}
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: `220px repeat(${cart.length}, 1fr)`,
+                  backgroundColor: "primary.main",
+                  color: "primary.contrastText",
+                  overflowX: "auto",
+                }}
               >
-                Assign specific services/packages to each member. Each person
-                must have at least one test selected.
-              </Typography>
-              <Grid container spacing={2}>
-                {memberSelections.map((selection, idx) => (
-                  <Grid size={{ xs: 12 }} key={idx}>
-                    <Card variant="outlined" sx={{ p: 2, borderRadius: "8px" }}>
-                      <Box
+                <Box sx={{ p: 1.5 }}>
+                  <Typography
+                    variant="caption"
+                    sx={{ fontWeight: 800, color: "inherit" }}
+                  >
+                    👤 Person
+                  </Typography>
+                </Box>
+                {cart.map((item) => (
+                  <Box
+                    key={item.id}
+                    sx={{
+                      p: 1,
+                      borderLeft: "1px solid rgba(255,255,255,0.2)",
+                      minWidth: 120,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{
+                        fontWeight: 700,
+                        color: "inherit",
+                        display: "block",
+                        lineHeight: 1.3,
+                      }}
+                    >
+                      {item.name}
+                    </Typography>
+                    <Typography
+                      variant="caption"
+                      sx={{ color: "rgba(255,255,255,0.75)" }}
+                    >
+                      ₹{item.basePrice}
+                    </Typography>
+                    <Box sx={{ mt: 0.5 }}>
+                      <Button
+                        size="small"
+                        variant="text"
                         sx={{
-                          display: "flex",
-                          gap: 2,
-                          alignItems: "center",
-                          mb: 1.5,
-                          flexWrap: "wrap",
+                          color: "rgba(255,255,255,0.9)",
+                          fontSize: "0.65rem",
+                          p: 0,
+                          minWidth: 0,
+                          textTransform: "none",
+                          lineHeight: 1.2,
+                          textDecoration: "underline",
+                        }}
+                        onClick={() => {
+                          const updated = memberSelections.map((sel) => ({
+                            ...sel,
+                            itemIds: sel.itemIds.includes(item.id)
+                              ? sel.itemIds
+                              : [...sel.itemIds, item.id],
+                          }));
+                          setMemberSelections(updated);
                         }}
                       >
-                        <TextField
-                          size="small"
-                          label={`Person ${idx + 1} Name`}
-                          value={selection.name}
-                          onChange={(e) => {
-                            const newSels = [...memberSelections];
-                            newSels[idx] = {
-                              ...newSels[idx],
-                              name: e.target.value,
-                            };
-                            setMemberSelections(newSels);
-                          }}
-                          sx={{ maxWidth: "200px" }}
-                        />
-                        {idx > 0 && (
-                          <Typography
-                            variant="caption"
-                            color="success.main"
-                            sx={{ fontWeight: 700 }}
-                          >
-                            ⭐ 20% member discount applies to all tests for this
-                            person
-                          </Typography>
-                        )}
-                      </Box>
-                      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 2 }}>
-                        {cart.map((item) => {
-                          const isChecked = selection.itemIds.includes(item.id);
-                          return (
-                            <FormControlLabel
-                              key={item.id}
-                              control={
-                                <Checkbox
-                                  size="small"
-                                  checked={isChecked}
-                                  onChange={(
-                                    e: React.ChangeEvent<HTMLInputElement>,
-                                  ) => {
-                                    const newSels = [...memberSelections];
-                                    const currentItems = [
-                                      ...newSels[idx].itemIds,
-                                    ];
-                                    if (e.target.checked) {
-                                      currentItems.push(item.id);
-                                    } else {
-                                      const index = currentItems.indexOf(
-                                        item.id,
-                                      );
-                                      if (index > -1)
-                                        currentItems.splice(index, 1);
-                                    }
-                                    newSels[idx] = {
-                                      ...newSels[idx],
-                                      itemIds: currentItems,
-                                    };
-                                    setMemberSelections(newSels);
-                                  }}
-                                />
-                              }
-                              label={`${item.name} (₹${item.basePrice})`}
-                              sx={{
-                                "& .MuiFormControlLabel-label": {
-                                  fontSize: "0.875rem",
-                                },
-                              }}
-                            />
-                          );
-                        })}
-                      </Box>
-                    </Card>
-                  </Grid>
+                        Select all ↓
+                      </Button>
+                    </Box>
+                  </Box>
                 ))}
-              </Grid>
+              </Box>
+
+              {/* Matrix rows */}
+              {memberSelections.map((selection, idx) => (
+                <Box
+                  key={idx}
+                  sx={{
+                    display: "grid",
+                    gridTemplateColumns: `220px repeat(${cart.length}, 1fr)`,
+                    borderTop: idx > 0 ? "1px solid" : "none",
+                    borderColor: "divider",
+                    backgroundColor:
+                      idx % 2 === 0 ? "background.paper" : "action.hover",
+                    overflowX: "auto",
+                  }}
+                >
+                  {/* Person label + name field */}
+                  <Box
+                    sx={{
+                      p: 1.5,
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 0.5,
+                    }}
+                  >
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 800, color: "primary.main" }}
+                    >
+                      {idx === 0 ? "🙋 Self (Primary)" : `👥 Member ${idx + 1}`}
+                    </Typography>
+                    <TextField
+                      size="small"
+                      placeholder="Name"
+                      value={selection.name}
+                      onChange={(e) => {
+                        const updated = [...memberSelections];
+                        updated[idx] = {
+                          ...updated[idx],
+                          name: e.target.value,
+                        };
+                        setMemberSelections(updated);
+                      }}
+                      sx={{
+                        "& .MuiInputBase-input": {
+                          py: 0.5,
+                          fontSize: "0.8rem",
+                        },
+                      }}
+                    />
+                    {idx > 0 && (
+                      <Typography
+                        variant="caption"
+                        sx={{ color: "success.main", fontWeight: 600 }}
+                      >
+                        20% discount
+                      </Typography>
+                    )}
+                  </Box>
+
+                  {/* Checkbox cells per service */}
+                  {cart.map((item) => {
+                    const isChecked = selection.itemIds.includes(item.id);
+                    return (
+                      <Box
+                        key={item.id}
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          borderLeft: "1px solid",
+                          borderColor: "divider",
+                          minWidth: 120,
+                          cursor: "pointer",
+                          backgroundColor: isChecked
+                            ? "rgba(21,128,61,0.08)"
+                            : "transparent",
+                          transition: "background-color 0.15s",
+                        }}
+                        onClick={() => {
+                          const updated = [...memberSelections];
+                          updated[idx] = {
+                            ...updated[idx],
+                            itemIds: isChecked
+                              ? updated[idx].itemIds.filter(
+                                  (id) => id !== item.id,
+                                )
+                              : [...updated[idx].itemIds, item.id],
+                          };
+                          setMemberSelections(updated);
+                        }}
+                      >
+                        <Checkbox
+                          size="small"
+                          checked={isChecked}
+                          onChange={() => {}}
+                          sx={{
+                            color: isChecked ? "success.main" : "divider",
+                            "&.Mui-checked": { color: "success.main" },
+                          }}
+                        />
+                      </Box>
+                    );
+                  })}
+                </Box>
+              ))}
+
+              {/* Matrix footer: per-person subtotals */}
+              <Box
+                sx={{
+                  display: "grid",
+                  gridTemplateColumns: `220px repeat(${cart.length}, 1fr)`,
+                  backgroundColor: "action.selected",
+                  borderTop: "2px solid",
+                  borderColor: "divider",
+                  overflowX: "auto",
+                }}
+              >
+                <Box sx={{ p: 1.5 }}>
+                  <Typography variant="caption" sx={{ fontWeight: 800 }}>
+                    Coverage
+                  </Typography>
+                </Box>
+                {cart.map((item) => {
+                  const count = memberSelections.filter((sel) =>
+                    sel.itemIds.includes(item.id),
+                  ).length;
+                  return (
+                    <Box
+                      key={item.id}
+                      sx={{
+                        p: 1,
+                        borderLeft: "1px solid",
+                        borderColor: "divider",
+                        minWidth: 120,
+                        textAlign: "center",
+                      }}
+                    >
+                      <Chip
+                        label={`${count} / ${memberSelections.length}`}
+                        size="small"
+                        color={
+                          count === 0
+                            ? "error"
+                            : count === memberSelections.length
+                              ? "success"
+                              : "warning"
+                        }
+                        sx={{ fontSize: "0.7rem", height: 20 }}
+                      />
+                    </Box>
+                  );
+                })}
+              </Box>
             </Box>
+
+            {/* Quick-fill hint */}
+            {memberSelections.some((m) => m.itemIds.length === 0) && (
+              <Alert severity="warning" sx={{ mt: 2, fontWeight: 600 }}>
+                ⚠️ Every person must have at least one service selected. Click{" "}
+                <strong>"Select all ↓"</strong> on a service column to quickly
+                assign it to everyone.
+              </Alert>
+            )}
 
             <Box
               sx={{
@@ -1436,20 +2164,49 @@ export default function CustomerBookPage() {
                           </Typography>
                         </Box>
                       )}
-                      <Box
-                        sx={{
-                          display: "flex",
-                          justifyContent: "space-between",
-                        }}
-                      >
-                        <Typography variant="caption" color="text.secondary">
-                          Travel Service Fee (Road distance:{" "}
-                          {selectedLab?.roadDistance.toFixed(2)} km)
-                        </Typography>
-                        <Typography variant="caption" sx={{ fontWeight: 600 }}>
-                          + ₹{travelFee}
-                        </Typography>
-                      </Box>
+                      {usingSplitMode && splitSuggestion ? (
+                        splitSuggestion.labs.map((lab, idx) => (
+                          <Box
+                            key={lab.branchId}
+                            sx={{
+                              display: "flex",
+                              justifyContent: "space-between",
+                            }}
+                          >
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                            >
+                              🚗 Travel Fee: {lab.name} (
+                              {lab.roadDistance.toFixed(1)} km)
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              sx={{ fontWeight: 600 }}
+                            >
+                              + ₹{Math.round(lab.travelFee)}
+                            </Typography>
+                          </Box>
+                        ))
+                      ) : (
+                        <Box
+                          sx={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <Typography variant="caption" color="text.secondary">
+                            Travel Service Fee (Road distance:{" "}
+                            {selectedLab?.roadDistance.toFixed(2)} km)
+                          </Typography>
+                          <Typography
+                            variant="caption"
+                            sx={{ fontWeight: 600 }}
+                          >
+                            + ₹{travelFee}
+                          </Typography>
+                        </Box>
+                      )}
                     </Box>
 
                     <Divider sx={{ my: 2 }} />
@@ -1490,60 +2247,125 @@ export default function CustomerBookPage() {
                     </Typography>
                     <Divider sx={{ mb: 2 }} />
 
-                    <Box sx={{ mb: 2 }}>
-                      <Typography variant="caption" color="text.secondary">
-                        Overall Appointment Slot
-                      </Typography>
-                      <Typography variant="body2" sx={{ fontWeight: 700 }}>
-                        {formatDate(selectedSlot?.slotDate ?? null)} @{" "}
-                        {formatTime(selectedSlot?.startTime ?? null)} -{" "}
-                        {formatTime(selectedSlot?.endTime ?? null)}
-                      </Typography>
-                    </Box>
-
-                    <Typography
-                      variant="caption"
-                      color="text.secondary"
-                      sx={{ fontWeight: 700, display: "block", mb: 1 }}
-                    >
-                      Allocated Timing Per Member
-                    </Typography>
-                    <Box
-                      sx={{ display: "flex", flexDirection: "column", gap: 1 }}
-                    >
-                      {getMemberSlotTimes(
-                        selectedSlot?.startTime ?? null,
-                        selectedSlot?.endTime ?? null,
-                        memberCount,
-                      ).map((slotTime, idx) => (
-                        <Box
-                          key={idx}
+                    {usingSplitMode && splitSuggestion ? (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          flexDirection: "column",
+                          gap: 1.5,
+                        }}
+                      >
+                        {splitSuggestion.labs.map((lab) => {
+                          const slot = splitSlots[lab.branchId];
+                          return (
+                            <Box
+                              key={lab.branchId}
+                              sx={{
+                                p: 1,
+                                bgcolor: "action.hover",
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 1,
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                sx={{ fontWeight: 700, display: "block" }}
+                              >
+                                🏨 {lab.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="primary.main"
+                                sx={{ fontWeight: 600 }}
+                              >
+                                Slot:{" "}
+                                {slot
+                                  ? `${formatDate(slot.slotDate)} @ ${formatTime(slot.startTime)}`
+                                  : "—"}
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                        <Alert
+                          severity="info"
                           sx={{
-                            p: 1,
-                            bgcolor: "background.default",
-                            border: "1px solid",
-                            borderColor: "divider",
-                            borderRadius: 1,
+                            mt: 1,
+                            p: 0.5,
+                            "& .MuiAlert-icon": { fontSize: 18 },
                           }}
                         >
                           <Typography
                             variant="caption"
-                            sx={{ fontWeight: 700, display: "block" }}
+                            sx={{ display: "block" }}
                           >
-                            {idx === 0
-                              ? "Member 1 (Primary Patient)"
-                              : `Member ${idx + 1}`}
+                            Timings for each member will be allocated within the
+                            respective slot ranges by each lab.
                           </Typography>
-                          <Typography
-                            variant="caption"
-                            color="primary.main"
-                            sx={{ fontWeight: 600 }}
-                          >
-                            Timing: {slotTime.start} to {slotTime.end}
+                        </Alert>
+                      </Box>
+                    ) : (
+                      <>
+                        <Box sx={{ mb: 2 }}>
+                          <Typography variant="caption" color="text.secondary">
+                            Overall Appointment Slot
+                          </Typography>
+                          <Typography variant="body2" sx={{ fontWeight: 700 }}>
+                            {formatDate(selectedSlot?.slotDate ?? null)} @{" "}
+                            {formatTime(selectedSlot?.startTime ?? null)} -{" "}
+                            {formatTime(selectedSlot?.endTime ?? null)}
                           </Typography>
                         </Box>
-                      ))}
-                    </Box>
+
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{ fontWeight: 700, display: "block", mb: 1 }}
+                        >
+                          Allocated Timing Per Member
+                        </Typography>
+                        <Box
+                          sx={{
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: 1,
+                          }}
+                        >
+                          {getMemberSlotTimes(
+                            selectedSlot?.startTime ?? null,
+                            selectedSlot?.endTime ?? null,
+                            memberCount,
+                          ).map((slotTime, idx) => (
+                            <Box
+                              key={idx}
+                              sx={{
+                                p: 1,
+                                bgcolor: "background.default",
+                                border: "1px solid",
+                                borderColor: "divider",
+                                borderRadius: 1,
+                              }}
+                            >
+                              <Typography
+                                variant="caption"
+                                sx={{ fontWeight: 700, display: "block" }}
+                              >
+                                {idx === 0
+                                  ? "Member 1 (Primary Patient)"
+                                  : `Member ${idx + 1}`}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="primary.main"
+                                sx={{ fontWeight: 600 }}
+                              >
+                                Timing: {slotTime.start} to {slotTime.end}
+                              </Typography>
+                            </Box>
+                          ))}
+                        </Box>
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </Grid>
@@ -1560,7 +2382,7 @@ export default function CustomerBookPage() {
               <Button
                 variant="outlined"
                 disabled={booking}
-                onClick={() => setStep(3)}
+                onClick={() => setStep(usingSplitMode ? 2 : 3)}
                 sx={{ fontWeight: 600 }}
               >
                 Back
