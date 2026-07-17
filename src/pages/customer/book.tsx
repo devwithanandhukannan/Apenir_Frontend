@@ -151,14 +151,6 @@ type ApiResponse<T> = {
   errors: string[];
 };
 
-const STEPS = [
-  "Your Location",
-  "Add to Cart",
-  "Choose Lab",
-  "Choose Date & Slot",
-  "Review & Confirm",
-];
-
 function formatDate(d: string | null) {
   if (!d) return "—";
   const date = new Date(d);
@@ -223,7 +215,33 @@ export default function CustomerBookPage() {
   const { bookAppointment } = useCustomerService();
 
   const [step, setStep] = useState(0);
+  const [usingSplitMode, setUsingSplitMode] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const stepsToRender = useMemo(() => {
+    if (usingSplitMode) {
+      return [
+        "Your Location",
+        "Add to Cart",
+        "Choose Lab",
+        "Choose Date & Slot",
+        "Review & Confirm",
+      ];
+    } else {
+      return [
+        "Your Location",
+        "Add to Cart",
+        "Choose Date & Slot",
+        "Review & Confirm",
+      ];
+    }
+  }, [usingSplitMode]);
+
+  const activeStepIndex = useMemo(() => {
+    if (usingSplitMode) return step;
+    if (step >= 3) return step - 1;
+    return step;
+  }, [step, usingSplitMode]);
 
   // Step 1: Location
   const [latitude, setLatitude] = useState<number | null>(null);
@@ -365,7 +383,6 @@ export default function CustomerBookPage() {
   const [splitSlotsLoading, setSplitSlotsLoading] = useState<
     Record<string, boolean>
   >({});
-  const [usingSplitMode, setUsingSplitMode] = useState(false);
   // Step 4: Slots
   const [slots, setSlots] = useState<SlotItem[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
@@ -502,10 +519,21 @@ export default function CustomerBookPage() {
   }, [usingSplitMode, splitSuggestion, splitSlotsData, loadSplitSlots]);
 
   useEffect(() => {
-    if (step === 2) {
+    if (step === 2 || step === 3) {
       loadEligibleLabs();
     }
   }, [step, loadEligibleLabs]);
+
+  // Auto-select laboratory when eligibleLabs finishes loading
+  useEffect(() => {
+    if (!usingSplitMode && eligibleLabs.length > 0) {
+      const closest = eligibleLabs.reduce(
+        (prev, curr) => (curr.roadDistance < prev.roadDistance ? curr : prev),
+        eligibleLabs[0],
+      );
+      setSelectedLab(closest);
+    }
+  }, [eligibleLabs, usingSplitMode]);
 
   // Load slots for the selected lab branch
   const loadSlots = useCallback(async () => {
@@ -799,11 +827,11 @@ export default function CustomerBookPage() {
 
         {/* Stepper */}
         <Stepper
-          activeStep={step}
+          activeStep={activeStepIndex}
           alternativeLabel
           sx={{ mb: 4, display: { xs: "none", sm: "flex" } }}
         >
-          {STEPS.map((label) => (
+          {stepsToRender.map((label) => (
             <Step key={label}>
               <StepLabel
                 sx={{
@@ -1365,10 +1393,10 @@ export default function CustomerBookPage() {
               <Button
                 variant="contained"
                 disabled={cart.length === 0}
-                onClick={() => setStep(2)}
+                onClick={() => setStep(usingSplitMode ? 2 : 3)}
                 sx={{ fontWeight: 700 }}
               >
-                Choose Laboratory
+                {usingSplitMode ? "Choose Laboratory" : "Choose Date & Slot"}
               </Button>
             </Box>
           </Box>
@@ -1821,7 +1849,9 @@ export default function CustomerBookPage() {
             <Grid container spacing={3}>
               <Grid size={{ xs: 12, md: 8 }}>
                 <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 600 }}>
-                  Select an available slot for {selectedLab?.name}:
+                  {labsLoading || !selectedLab
+                    ? "Loading laboratory details..."
+                    : `Select an available slot for ${selectedLab.name}:`}
                 </Typography>
 
                 {slotsLoading ? (
@@ -2024,7 +2054,7 @@ export default function CustomerBookPage() {
             >
               <Button
                 variant="outlined"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(usingSplitMode ? 2 : 1)}
                 sx={{ fontWeight: 600 }}
               >
                 Back
