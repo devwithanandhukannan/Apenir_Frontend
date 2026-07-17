@@ -21,6 +21,7 @@ import IconButton from "@mui/material/IconButton";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { useCustomerService } from "@/core_components/apis/admin/customerService/useCustomerService";
 import MapLocationPicker from "@/component_library/MapLocationPicker";
 
 import ScienceIcon from "@mui/icons-material/Science";
@@ -635,7 +636,7 @@ export default function CustomerBookPage() {
         })),
       };
       await bookAppointment(payload, {
-        onSuccess: (res) => {
+        onSuccess: (res: any) => {
           setBooking(false);
           if (res.data && (res.data as any).paymentUrl) {
             window.location.href = (res.data as any).paymentUrl;
@@ -646,7 +647,7 @@ export default function CustomerBookPage() {
             setBookedAddress(res.data?.locationAddress ?? "");
           }
         },
-        onError: (err) => {
+        onError: (err: any) => {
           setBooking(false);
           setError(
             err?.message ??

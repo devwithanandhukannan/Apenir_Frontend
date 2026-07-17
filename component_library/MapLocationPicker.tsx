@@ -201,15 +201,49 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     if (!labs || labs.length === 0) return;
 
     import("leaflet").then((L) => {
-      const redIconInstance = new L.Icon({
-        iconUrl:
-          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
-        shadowUrl:
-          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
-        iconSize: [25, 41],
-        iconAnchor: [12, 41],
-        popupAnchor: [1, -34],
-        shadowSize: [41, 41],
+      const redIconInstance = L.divIcon({
+        className: "custom-lab-marker",
+        html: `
+          <div style="
+            position: relative;
+            width: 30px;
+            height: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          ">
+            <div style="
+              position: absolute;
+              width: 100%;
+              height: 100%;
+              background-color: #ef4444;
+              border-radius: 50%;
+              opacity: 0.25;
+            "></div>
+            <div style="
+              position: relative;
+              width: 18px;
+              height: 18px;
+              background-color: #dc2626;
+              border: 2px solid #ffffff;
+              border-radius: 50%;
+              box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+            ">
+              <div style="
+                width: 6px;
+                height: 6px;
+                background-color: #ffffff;
+                border-radius: 50%;
+              "></div>
+            </div>
+          </div>
+        `,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15],
+        popupAnchor: [0, -15],
       });
 
       labs.forEach((lab) => {
