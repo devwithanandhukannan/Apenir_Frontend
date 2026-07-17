@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
 import Box from "@mui/material/Box";
@@ -21,14 +21,9 @@ import IconButton from "@mui/material/IconButton";
 import Tabs from "@mui/material/Tabs";
 import Tab from "@mui/material/Tab";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
-import { useCustomerService } from "@/core_components/apis/admin/customerService/useCustomerService";
-import Checkbox from "@mui/material/Checkbox";
-import FormControlLabel from "@mui/material/FormControlLabel";
 import MapLocationPicker from "@/component_library/MapLocationPicker";
 
 import ScienceIcon from "@mui/icons-material/Science";
-import LocationOnIcon from "@mui/icons-material/LocationOn";
-import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import ArrowBackIcon from "@mui/icons-material/ArrowBack";
 import PeopleIcon from "@mui/icons-material/People";
@@ -45,6 +40,7 @@ interface ServiceItem {
   category: string;
   description?: string;
   basePrice: number;
+  originalPrice?: number;
   isActive: boolean;
 }
 
@@ -53,11 +49,30 @@ interface PackageItem {
   name: string;
   description?: string;
   basePrice: number;
+  originalPrice?: number;
   isActive: boolean;
   serviceIds: string[];
 }
 
 type CartItem = ServiceItem | PackageItem;
+
+interface LocationCatalogResponse {
+  branches: RegionAvailabilityResult[];
+  services: ServiceItem[];
+  packages: PackageItem[];
+  branchServices: Array<{
+    branchId: string;
+    serviceId: string;
+    price: number;
+    originalPrice?: number;
+  }>;
+  branchPackages: Array<{
+    branchId: string;
+    packageId: string;
+    price: number;
+    originalPrice?: number;
+  }>;
+}
 
 interface EligibleLab {
   branchId: string;
@@ -117,6 +132,8 @@ interface RegionAvailabilityResult {
   city: string;
   district?: string;
   distance: number;
+  latitude: number;
+  longitude: number;
   servicesAvailableCount: number;
   servicesRequestedCount: number;
   servicesCoveredCount: number;
@@ -210,24 +227,133 @@ export default function CustomerBookPage() {
   // Step 1: Location
   const [latitude, setLatitude] = useState<number | null>(null);
   const [longitude, setLongitude] = useState<number | null>(null);
-  const [addressLine, setAddressLine] = useState("");
   const [building, setBuilding] = useState("");
   const [landmark, setLandmark] = useState("");
   const [floor, setFloor] = useState("");
 
   // Step 2: Services / Packages Cart
-  const [services, setServices] = useState<ServiceItem[]>([]);
-  const [packages, setPackages] = useState<PackageItem[]>([]);
+  const [selectedLab, setSelectedLab] = useState<EligibleLab | null>(null);
+  const [memberCount, setMemberCount] = useState(1);
+  const [memberSelections, setMemberSelections] = useState<
+    { name: string; itemIds: string[] }[]
+  >([]);
   const [catalogLoading, setCatalogLoading] = useState(false);
   const [cart, setCart] = useState<CartItem[]>([]);
   const [activeTab, setActiveTab] = useState(0); // 0 = Services, 1 = Packages
+
+  const [catalogResponse, setCatalogResponse] =
+    useState<LocationCatalogResponse | null>(null);
+  const [cartQuantities, setCartQuantities] = useState<Record<string, number>>(
+    {},
+  );
+
+  const getItemPrice = useCallback(
+    (item: CartItem, branchId?: string) => {
+      const activeBranchId = branchId || selectedLab?.branchId;
+      if (activeBranchId && catalogResponse) {
+        if ("serviceIds" in item) {
+          const bp = catalogResponse.branchPackages.find(
+            (x) => x.branchId === activeBranchId && x.packageId === item.id,
+          );
+          return bp ? bp.price : item.basePrice;
+        } else {
+          const bs = catalogResponse.branchServices.find(
+            (x) => x.branchId === activeBranchId && x.serviceId === item.id,
+          );
+          return bs ? bs.price : item.basePrice;
+        }
+      }
+      return item.basePrice;
+    },
+    [selectedLab, catalogResponse],
+  );
+
+  const getItemOriginalPrice = useCallback(
+    (item: CartItem, branchId?: string) => {
+      const activeBranchId = branchId || selectedLab?.branchId;
+      if (activeBranchId && catalogResponse) {
+        if ("serviceIds" in item) {
+          const bp = catalogResponse.branchPackages.find(
+            (x) => x.branchId === activeBranchId && x.packageId === item.id,
+          );
+          return bp ? bp.originalPrice : item.originalPrice;
+        } else {
+          const bs = catalogResponse.branchServices.find(
+            (x) => x.branchId === activeBranchId && x.serviceId === item.id,
+          );
+          return bs ? bs.originalPrice : item.originalPrice;
+        }
+      }
+      return item.originalPrice;
+    },
+    [selectedLab, catalogResponse],
+  );
+
+  const eligibleLabsForCart = useMemo(() => {
+    if (!catalogResponse || cart.length === 0) return [];
+    return catalogResponse.branches.filter((branch) => {
+      return cart.every((cartItem) => {
+        if ("serviceIds" in cartItem) {
+          return catalogResponse.branchPackages.some(
+            (bp) =>
+              bp.branchId === branch.branchId && bp.packageId === cartItem.id,
+          );
+        } else {
+          return catalogResponse.branchServices.some(
+            (bs) =>
+              bs.branchId === branch.branchId && bs.serviceId === cartItem.id,
+          );
+        }
+      });
+    });
+  }, [catalogResponse, cart]);
+
+  const filteredServices = useMemo(() => {
+    if (!catalogResponse) return [];
+    if (cart.length === 0) return catalogResponse.services;
+    const allowedBranchIds = new Set(
+      eligibleLabsForCart.map((b) => b.branchId),
+    );
+    return catalogResponse.services.filter((svc) =>
+      catalogResponse.branchServices.some(
+        (bs) => bs.serviceId === svc.id && allowedBranchIds.has(bs.branchId),
+      ),
+    );
+  }, [catalogResponse, cart, eligibleLabsForCart]);
+
+  const filteredPackages = useMemo(() => {
+    if (!catalogResponse) return [];
+    if (cart.length === 0) return catalogResponse.packages;
+    const allowedBranchIds = new Set(
+      eligibleLabsForCart.map((b) => b.branchId),
+    );
+    return catalogResponse.packages.filter((pkg) =>
+      catalogResponse.branchPackages.some(
+        (bp) => bp.packageId === pkg.id && allowedBranchIds.has(bp.branchId),
+      ),
+    );
+  }, [catalogResponse, cart, eligibleLabsForCart]);
+
+  useEffect(() => {
+    const maxCount = Math.max(1, ...Object.values(cartQuantities));
+    const nextSelections = Array.from({ length: maxCount }, (_, i) => {
+      const itemIds = cart
+        .filter((item) => (cartQuantities[item.id] || 0) > i)
+        .map((item) => item.id);
+      return {
+        name: i === 0 ? "Self" : `Member ${i + 1}`,
+        itemIds,
+      };
+    });
+    setMemberSelections(nextSelections);
+    setMemberCount(maxCount);
+  }, [cart, cartQuantities]);
 
   // Step 3: Labs List
   const [eligibleLabs, setEligibleLabs] = useState<EligibleLab[]>([]);
   const [splitSuggestion, setSplitSuggestion] =
     useState<SplitSuggestion | null>(null);
   const [labsLoading, setLabsLoading] = useState(false);
-  const [selectedLab, setSelectedLab] = useState<EligibleLab | null>(null);
   // Multi-lab: track which slot was chosen for each sub-lab
   const [splitSlots, setSplitSlots] = useState<Record<string, SlotItem | null>>(
     {},
@@ -239,32 +365,10 @@ export default function CustomerBookPage() {
     Record<string, boolean>
   >({});
   const [usingSplitMode, setUsingSplitMode] = useState(false);
-
-  // Step 4: Slots & Member Count
+  // Step 4: Slots
   const [slots, setSlots] = useState<SlotItem[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [selectedSlot, setSelectedSlot] = useState<SlotItem | null>(null);
-  const [memberCount, setMemberCount] = useState(1);
-  const [memberSelections, setMemberSelections] = useState<
-    { name: string; itemIds: string[] }[]
-  >([]);
-
-  useEffect(() => {
-    setMemberSelections((prev) => {
-      const next = [...prev];
-      if (next.length > memberCount) {
-        return next.slice(0, memberCount);
-      }
-      while (next.length < memberCount) {
-        next.push({
-          name: next.length === 0 ? "Self" : `Member ${next.length + 1}`,
-          itemIds: cart.map((c) => c.id),
-        });
-      }
-      return next;
-    });
-  }, [memberCount, cart]);
-
   // Step 5: Confirmation
   const [booking, setBooking] = useState(false);
   const [booked, setBooked] = useState(false);
@@ -309,34 +413,31 @@ export default function CustomerBookPage() {
 
   // Load diagnostic items (Services & Packages)
   const loadCatalog = useCallback(async () => {
+    if (!latitude || !longitude) return;
     setCatalogLoading(true);
     setError(null);
     try {
-      await get<ApiResponse<ServiceItem[]>>({
-        endpoint: "/api/services",
-        requireAuth: true,
-        onSuccess: (svcRes) => {
-          setServices(svcRes.data?.filter((s) => s.isActive) ?? []);
-        },
-      });
-
-      await get<ApiResponse<PackageItem[]>>({
-        endpoint: "/api/packages",
-        requireAuth: true,
-        onSuccess: (pkgRes) => {
-          setPackages(pkgRes.data?.filter((p) => p.isActive) ?? []);
-        },
-      });
+      const res = await fetch(
+        `${process.env.NEXT_PUBLIC_API_URL ?? ""}/api/appointments/location-catalog?latitude=${latitude}&longitude=${longitude}`,
+      );
+      const json: ApiResponse<LocationCatalogResponse> = await res.json();
+      if (json.success && json.data) {
+        setCatalogResponse(json.data);
+      } else {
+        setError("Failed to load catalog for this location.");
+      }
     } catch (err: any) {
-      setError("Failed to load medical services or package catalog.");
+      setError("Error loading diagnostic catalog: " + (err.message || err));
     } finally {
       setCatalogLoading(false);
     }
-  }, [get]);
+  }, [latitude, longitude]);
 
   useEffect(() => {
-    loadCatalog();
-  }, [loadCatalog]);
+    if (latitude && longitude) {
+      loadCatalog();
+    }
+  }, [latitude, longitude, loadCatalog]);
 
   // Load eligible lab branches for location & cart
   const loadEligibleLabs = useCallback(async () => {
@@ -434,10 +535,25 @@ export default function CustomerBookPage() {
   const handleAddToCart = (item: CartItem) => {
     if (cart.find((c) => c.id === item.id)) return;
     setCart((prev) => [...prev, item]);
+    setCartQuantities((prev) => ({ ...prev, [item.id]: 1 }));
   };
 
   const handleRemoveFromCart = (itemId: string) => {
     setCart((prev) => prev.filter((item) => item.id !== itemId));
+    setCartQuantities((prev) => {
+      const next = { ...prev };
+      delete next[itemId];
+      return next;
+    });
+  };
+
+  const handleUpdateQuantity = (itemId: string, qty: number) => {
+    if (qty <= 0) {
+      handleRemoveFromCart(itemId);
+      return;
+    }
+    if (qty > 6) return;
+    setCartQuantities((prev) => ({ ...prev, [itemId]: qty }));
   };
 
   const handleBook = async () => {
@@ -542,11 +658,10 @@ export default function CustomerBookPage() {
   };
 
   // Split prices calculation
-  const subtotal = cart.reduce((sum, item) => sum + item.basePrice, 0);
   const memberTotals = memberSelections.map((selection, idx) => {
     const sum = selection.itemIds.reduce((s, id) => {
       const item = cart.find((c) => c.id === id);
-      return s + (item?.basePrice ?? 0);
+      return s + (item ? getItemPrice(item) : 0);
     }, 0);
     return {
       name: selection.name,
@@ -555,6 +670,7 @@ export default function CustomerBookPage() {
       discount: idx === 0 ? 0 : Math.round(sum * 0.2),
     };
   });
+  const subtotal = memberTotals.reduce((sum, m) => sum + m.finalAmount, 0);
 
   const baseSubtotalTotal = memberTotals.reduce((sum, m) => sum + m.sum, 0);
   const totalMemberDiscount = memberTotals.reduce(
@@ -723,10 +839,15 @@ export default function CustomerBookPage() {
                   onChange={(loc) => {
                     setLatitude(loc.lat);
                     setLongitude(loc.lng);
-                    setAddressLine(loc.address);
                   }}
                   height={420}
                   label="Locate Branch or Pinpoint Collection Area"
+                  labs={regionAvail.labs.map((l) => ({
+                    id: l.branchId,
+                    name: l.name,
+                    lat: l.latitude,
+                    lng: l.longitude,
+                  }))}
                 />
               </Grid>
               <Grid size={{ xs: 12, md: 4 }}>
@@ -896,7 +1017,7 @@ export default function CustomerBookPage() {
                   </Grid>
                 ) : activeTab === 0 ? (
                   <Grid container spacing={2}>
-                    {services.map((item) => (
+                    {filteredServices.map((item: CartItem) => (
                       <Grid size={{ xs: 12 }} key={item.id}>
                         <Card
                           elevation={0}
@@ -921,7 +1042,8 @@ export default function CustomerBookPage() {
                                 variant="caption"
                                 color="text.secondary"
                               >
-                                {item.category} ·{" "}
+                                {"category" in item ? item.category : "Package"}{" "}
+                                ·{" "}
                                 {item.description ??
                                   "NABL Certified Diagnostic Test"}
                               </Typography>
@@ -933,11 +1055,24 @@ export default function CustomerBookPage() {
                                 gap: 2,
                               }}
                             >
+                              {getItemOriginalPrice(item) &&
+                                getItemOriginalPrice(item)! >
+                                  getItemPrice(item) && (
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      textDecoration: "line-through",
+                                      color: "text.secondary",
+                                    }}
+                                  >
+                                    ₹{getItemOriginalPrice(item)}
+                                  </Typography>
+                                )}
                               <Typography
                                 variant="body2"
                                 sx={{ fontWeight: 800, color: "primary.main" }}
                               >
-                                ₹{item.basePrice}
+                                ₹{getItemPrice(item)}
                               </Typography>
                               <Button
                                 size="small"
@@ -966,7 +1101,7 @@ export default function CustomerBookPage() {
                   </Grid>
                 ) : (
                   <Grid container spacing={2}>
-                    {packages.map((item) => (
+                    {filteredPackages.map((item: CartItem) => (
                       <Grid size={{ xs: 12 }} key={item.id}>
                         <Card
                           elevation={0}
@@ -1003,11 +1138,24 @@ export default function CustomerBookPage() {
                                 gap: 2,
                               }}
                             >
+                              {getItemOriginalPrice(item) &&
+                                getItemOriginalPrice(item)! >
+                                  getItemPrice(item) && (
+                                  <Typography
+                                    variant="caption"
+                                    sx={{
+                                      textDecoration: "line-through",
+                                      color: "text.secondary",
+                                    }}
+                                  >
+                                    ₹{getItemOriginalPrice(item)}
+                                  </Typography>
+                                )}
                               <Typography
                                 variant="body2"
                                 sx={{ fontWeight: 800, color: "primary.main" }}
                               >
-                                ₹{item.basePrice}
+                                ₹{getItemPrice(item)}
                               </Typography>
                               <Button
                                 size="small"
@@ -1084,27 +1232,90 @@ export default function CustomerBookPage() {
                               mb: 1.5,
                             }}
                           >
-                            <Box sx={{ maxWidth: "70%" }}>
+                            <Box sx={{ maxWidth: "60%" }}>
                               <Typography
                                 variant="caption"
                                 sx={{ fontWeight: 700, display: "block" }}
                               >
                                 {item.name}
                               </Typography>
-                              <Typography
-                                variant="caption"
-                                color="text.secondary"
+                              <Box
+                                sx={{
+                                  display: "flex",
+                                  alignItems: "center",
+                                  gap: 1,
+                                }}
                               >
-                                ₹{item.basePrice}
-                              </Typography>
+                                {getItemOriginalPrice(item) &&
+                                  getItemOriginalPrice(item)! >
+                                    getItemPrice(item) && (
+                                    <Typography
+                                      variant="caption"
+                                      sx={{
+                                        textDecoration: "line-through",
+                                        color: "text.secondary",
+                                      }}
+                                    >
+                                      ₹{getItemOriginalPrice(item)}
+                                    </Typography>
+                                  )}
+                                <Typography
+                                  variant="caption"
+                                  color="primary.main"
+                                  sx={{ fontWeight: 600 }}
+                                >
+                                  ₹{getItemPrice(item)}
+                                </Typography>
+                              </Box>
                             </Box>
-                            <IconButton
-                              size="small"
-                              color="error"
-                              onClick={() => handleRemoveFromCart(item.id)}
+                            <Box
+                              sx={{
+                                display: "flex",
+                                alignItems: "center",
+                                gap: 0.5,
+                              }}
                             >
-                              <DeleteIcon sx={{ fontSize: 16 }} />
-                            </IconButton>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  handleUpdateQuantity(
+                                    item.id,
+                                    (cartQuantities[item.id] || 1) - 1,
+                                  )
+                                }
+                              >
+                                <RemoveIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                              <Typography
+                                variant="body2"
+                                sx={{
+                                  fontWeight: 700,
+                                  minWidth: 16,
+                                  textAlign: "center",
+                                }}
+                              >
+                                {cartQuantities[item.id] || 1}
+                              </Typography>
+                              <IconButton
+                                size="small"
+                                onClick={() =>
+                                  handleUpdateQuantity(
+                                    item.id,
+                                    (cartQuantities[item.id] || 1) + 1,
+                                  )
+                                }
+                              >
+                                <AddIcon sx={{ fontSize: 14 }} />
+                              </IconButton>
+                              <IconButton
+                                size="small"
+                                color="error"
+                                onClick={() => handleRemoveFromCart(item.id)}
+                                sx={{ ml: 0.5 }}
+                              >
+                                <DeleteIcon sx={{ fontSize: 16 }} />
+                              </IconButton>
+                            </Box>
                           </Box>
                         ))}
                         <Divider sx={{ my: 2 }} />
@@ -1694,7 +1905,7 @@ export default function CustomerBookPage() {
                     >
                       <PeopleIcon color="primary" />
                       <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
-                        Number of Persons
+                        Visits / Patient Details
                       </Typography>
                     </Box>
                     <Divider sx={{ mb: 2 }} />
@@ -1707,40 +1918,55 @@ export default function CustomerBookPage() {
                         mb: 2,
                       }}
                     >
-                      <IconButton
-                        size="small"
-                        disabled={memberCount <= 1}
-                        onClick={() => setMemberCount((c) => c - 1)}
-                        sx={{ border: "1px solid", borderColor: "divider" }}
+                      <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                        Total Patients:
+                      </Typography>
+                      <Typography
+                        variant="body1"
+                        sx={{ fontWeight: 800, color: "primary.main" }}
                       >
-                        <RemoveIcon />
-                      </IconButton>
-                      <Typography variant="body1" sx={{ fontWeight: 800 }}>
                         {memberCount}
                       </Typography>
-                      <IconButton
-                        size="small"
-                        disabled={
-                          selectedSlot
-                            ? memberCount >=
-                              selectedSlot.maxCapacity -
-                                selectedSlot.bookedCount
-                            : memberCount >= 6
-                        }
-                        onClick={() => setMemberCount((c) => c + 1)}
-                        sx={{ border: "1px solid", borderColor: "divider" }}
-                      >
-                        <AddIcon />
-                      </IconButton>
                     </Box>
+                    <Divider sx={{ mb: 2 }} />
+                    <Typography
+                      variant="caption"
+                      sx={{ fontWeight: 700, mb: 1, display: "block" }}
+                    >
+                      Patient Count Per Service:
+                    </Typography>
+                    {cart.map((item) => (
+                      <Box
+                        key={item.id}
+                        sx={{
+                          display: "flex",
+                          justifyContent: "space-between",
+                          mb: 1,
+                        }}
+                      >
+                        <Typography variant="caption" color="text.secondary">
+                          • {item.name}
+                        </Typography>
+                        <Typography variant="caption" sx={{ fontWeight: 600 }}>
+                          {cartQuantities[item.id] || 1}{" "}
+                          {(cartQuantities[item.id] || 1) === 1
+                            ? "Patient"
+                            : "Patients"}
+                        </Typography>
+                      </Box>
+                    ))}
                     {memberCount > 1 && (
                       <Typography
                         variant="caption"
-                        color="text.secondary"
-                        sx={{ display: "block", textAlign: "center" }}
+                        color="success.main"
+                        sx={{
+                          display: "block",
+                          mt: 2,
+                          textAlign: "center",
+                          fontWeight: 600,
+                        }}
                       >
-                        Additional members are charged at 80% (20% discount on
-                        base rates).
+                        20% off applied for additional patients on each service.
                       </Typography>
                     )}
                   </CardContent>
@@ -1748,251 +1974,43 @@ export default function CustomerBookPage() {
               </Grid>
             </Grid>
 
-            {/* Member × Service matrix */}
-            <Box
-              sx={{
-                mt: 3,
-                border: "1px solid",
-                borderColor: "divider",
-                borderRadius: "10px",
-                overflow: "hidden",
-              }}
-            >
-              {/* Matrix header */}
-              <Box
+            {memberCount > 1 && (
+              <Card
                 sx={{
-                  display: "grid",
-                  gridTemplateColumns: `220px repeat(${cart.length}, 1fr)`,
-                  backgroundColor: "primary.main",
-                  color: "primary.contrastText",
-                  overflowX: "auto",
+                  mt: 3,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  p: 2,
                 }}
               >
-                <Box sx={{ p: 1.5 }}>
-                  <Typography
-                    variant="caption"
-                    sx={{ fontWeight: 800, color: "inherit" }}
-                  >
-                    👤 Person
-                  </Typography>
-                </Box>
-                {cart.map((item) => (
-                  <Box
-                    key={item.id}
-                    sx={{
-                      p: 1,
-                      borderLeft: "1px solid rgba(255,255,255,0.2)",
-                      minWidth: 120,
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{
-                        fontWeight: 700,
-                        color: "inherit",
-                        display: "block",
-                        lineHeight: 1.3,
-                      }}
-                    >
-                      {item.name}
-                    </Typography>
-                    <Typography
-                      variant="caption"
-                      sx={{ color: "rgba(255,255,255,0.75)" }}
-                    >
-                      ₹{item.basePrice}
-                    </Typography>
-                    <Box sx={{ mt: 0.5 }}>
-                      <Button
+                <Typography variant="subtitle2" sx={{ fontWeight: 800, mb: 2 }}>
+                  👤 Patient Names (Optional)
+                </Typography>
+                <Grid container spacing={2}>
+                  {memberSelections.map((selection, idx) => (
+                    <Grid size={{ xs: 12, sm: 6 }} key={idx}>
+                      <TextField
+                        fullWidth
                         size="small"
-                        variant="text"
-                        sx={{
-                          color: "rgba(255,255,255,0.9)",
-                          fontSize: "0.65rem",
-                          p: 0,
-                          minWidth: 0,
-                          textTransform: "none",
-                          lineHeight: 1.2,
-                          textDecoration: "underline",
-                        }}
-                        onClick={() => {
-                          const updated = memberSelections.map((sel) => ({
-                            ...sel,
-                            itemIds: sel.itemIds.includes(item.id)
-                              ? sel.itemIds
-                              : [...sel.itemIds, item.id],
-                          }));
-                          setMemberSelections(updated);
-                        }}
-                      >
-                        Select all ↓
-                      </Button>
-                    </Box>
-                  </Box>
-                ))}
-              </Box>
-
-              {/* Matrix rows */}
-              {memberSelections.map((selection, idx) => (
-                <Box
-                  key={idx}
-                  sx={{
-                    display: "grid",
-                    gridTemplateColumns: `220px repeat(${cart.length}, 1fr)`,
-                    borderTop: idx > 0 ? "1px solid" : "none",
-                    borderColor: "divider",
-                    backgroundColor:
-                      idx % 2 === 0 ? "background.paper" : "action.hover",
-                    overflowX: "auto",
-                  }}
-                >
-                  {/* Person label + name field */}
-                  <Box
-                    sx={{
-                      p: 1.5,
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 0.5,
-                    }}
-                  >
-                    <Typography
-                      variant="caption"
-                      sx={{ fontWeight: 800, color: "primary.main" }}
-                    >
-                      {idx === 0 ? "🙋 Self (Primary)" : `👥 Member ${idx + 1}`}
-                    </Typography>
-                    <TextField
-                      size="small"
-                      placeholder="Name"
-                      value={selection.name}
-                      onChange={(e) => {
-                        const updated = [...memberSelections];
-                        updated[idx] = {
-                          ...updated[idx],
-                          name: e.target.value,
-                        };
-                        setMemberSelections(updated);
-                      }}
-                      sx={{
-                        "& .MuiInputBase-input": {
-                          py: 0.5,
-                          fontSize: "0.8rem",
-                        },
-                      }}
-                    />
-                    {idx > 0 && (
-                      <Typography
-                        variant="caption"
-                        sx={{ color: "success.main", fontWeight: 600 }}
-                      >
-                        20% discount
-                      </Typography>
-                    )}
-                  </Box>
-
-                  {/* Checkbox cells per service */}
-                  {cart.map((item) => {
-                    const isChecked = selection.itemIds.includes(item.id);
-                    return (
-                      <Box
-                        key={item.id}
-                        sx={{
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          borderLeft: "1px solid",
-                          borderColor: "divider",
-                          minWidth: 120,
-                          cursor: "pointer",
-                          backgroundColor: isChecked
-                            ? "rgba(21,128,61,0.08)"
-                            : "transparent",
-                          transition: "background-color 0.15s",
-                        }}
-                        onClick={() => {
+                        label={
+                          idx === 0
+                            ? "Self (Primary Patient)"
+                            : `Family Member ${idx + 1}`
+                        }
+                        value={selection.name}
+                        onChange={(e) => {
                           const updated = [...memberSelections];
                           updated[idx] = {
                             ...updated[idx],
-                            itemIds: isChecked
-                              ? updated[idx].itemIds.filter(
-                                  (id) => id !== item.id,
-                                )
-                              : [...updated[idx].itemIds, item.id],
+                            name: e.target.value,
                           };
                           setMemberSelections(updated);
                         }}
-                      >
-                        <Checkbox
-                          size="small"
-                          checked={isChecked}
-                          onChange={() => {}}
-                          sx={{
-                            color: isChecked ? "success.main" : "divider",
-                            "&.Mui-checked": { color: "success.main" },
-                          }}
-                        />
-                      </Box>
-                    );
-                  })}
-                </Box>
-              ))}
-
-              {/* Matrix footer: per-person subtotals */}
-              <Box
-                sx={{
-                  display: "grid",
-                  gridTemplateColumns: `220px repeat(${cart.length}, 1fr)`,
-                  backgroundColor: "action.selected",
-                  borderTop: "2px solid",
-                  borderColor: "divider",
-                  overflowX: "auto",
-                }}
-              >
-                <Box sx={{ p: 1.5 }}>
-                  <Typography variant="caption" sx={{ fontWeight: 800 }}>
-                    Coverage
-                  </Typography>
-                </Box>
-                {cart.map((item) => {
-                  const count = memberSelections.filter((sel) =>
-                    sel.itemIds.includes(item.id),
-                  ).length;
-                  return (
-                    <Box
-                      key={item.id}
-                      sx={{
-                        p: 1,
-                        borderLeft: "1px solid",
-                        borderColor: "divider",
-                        minWidth: 120,
-                        textAlign: "center",
-                      }}
-                    >
-                      <Chip
-                        label={`${count} / ${memberSelections.length}`}
-                        size="small"
-                        color={
-                          count === 0
-                            ? "error"
-                            : count === memberSelections.length
-                              ? "success"
-                              : "warning"
-                        }
-                        sx={{ fontSize: "0.7rem", height: 20 }}
                       />
-                    </Box>
-                  );
-                })}
-              </Box>
-            </Box>
-
-            {/* Quick-fill hint */}
-            {memberSelections.some((m) => m.itemIds.length === 0) && (
-              <Alert severity="warning" sx={{ mt: 2, fontWeight: 600 }}>
-                ⚠️ Every person must have at least one service selected. Click{" "}
-                <strong>"Select all ↓"</strong> on a service column to quickly
-                assign it to everyone.
-              </Alert>
+                    </Grid>
+                  ))}
+                </Grid>
+              </Card>
             )}
 
             <Box
@@ -2050,74 +2068,77 @@ export default function CustomerBookPage() {
                         color="text.secondary"
                         sx={{ fontWeight: 700, mb: 1, display: "block" }}
                       >
-                        Selected Tests per Patient
+                        Itemized Booking Summary
                       </Typography>
-                      {memberSelections.map((selection, idx) => (
-                        <Box
-                          key={idx}
-                          sx={{
-                            mb: 1.5,
-                            p: 1.5,
-                            borderRadius: "6px",
-                            backgroundColor: "action.hover",
-                            border: "1px solid",
-                            borderColor: "divider",
-                          }}
-                        >
-                          <Typography
-                            variant="subtitle2"
+                      {cart.map((item) => {
+                        const qty = cartQuantities[item.id] || 1;
+                        const price = getItemPrice(item);
+                        // First copy pays full price, subsequent copies get 20% discount (i.e. 80% price)
+                        const cost =
+                          price + (qty > 1 ? (qty - 1) * price * 0.8 : 0);
+                        const originalPrice = getItemOriginalPrice(item);
+                        const originalCost = originalPrice
+                          ? originalPrice * qty
+                          : null;
+
+                        return (
+                          <Box
+                            key={item.id}
                             sx={{
-                              fontWeight: 700,
-                              fontSize: "0.85rem",
-                              color: "primary.main",
+                              mb: 1.5,
+                              p: 1.5,
+                              borderRadius: "6px",
+                              backgroundColor: "action.hover",
+                              border: "1px solid",
+                              borderColor: "divider",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center",
                             }}
                           >
-                            👤 {selection.name}{" "}
-                            {idx > 0 && "(20% Member Discount)"}
-                          </Typography>
-                          {selection.itemIds.map((id) => {
-                            const item = cart.find((c) => c.id === id);
-                            if (!item) return null;
-                            const discountRate = idx === 0 ? 1 : 0.8;
-                            return (
-                              <Box
-                                key={id}
+                            <Box>
+                              <Typography
+                                variant="subtitle2"
                                 sx={{
-                                  display: "flex",
-                                  justifyContent: "space-between",
-                                  pl: 2,
-                                  mt: 0.5,
+                                  fontWeight: 700,
+                                  fontSize: "0.85rem",
+                                  color: "primary.main",
                                 }}
                               >
+                                {item.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                              >
+                                {qty} {qty === 1 ? "user" : "users"} (@ ₹{price}
+                                {qty > 1 ? " + 20% member off" : ""})
+                              </Typography>
+                            </Box>
+                            <Box sx={{ textAlign: "right" }}>
+                              {originalCost && originalCost > cost && (
                                 <Typography
                                   variant="caption"
-                                  color="text.secondary"
+                                  sx={{
+                                    textDecoration: "line-through",
+                                    color: "text.secondary",
+                                    mr: 1,
+                                    display: "block",
+                                  }}
                                 >
-                                  • {item.name}
+                                  ₹{Math.round(originalCost)}
                                 </Typography>
-                                <Typography
-                                  variant="caption"
-                                  sx={{ fontWeight: 600 }}
-                                >
-                                  ₹{Math.round(item.basePrice * discountRate)}{" "}
-                                  {idx > 0 && (
-                                    <span
-                                      style={{
-                                        textDecoration: "line-through",
-                                        color: "gray",
-                                        fontSize: "0.7rem",
-                                        marginLeft: "4px",
-                                      }}
-                                    >
-                                      ₹{item.basePrice}
-                                    </span>
-                                  )}
-                                </Typography>
-                              </Box>
-                            );
-                          })}
-                        </Box>
-                      ))}
+                              )}
+                              <Typography
+                                variant="body2"
+                                sx={{ fontWeight: 800, color: "primary.main" }}
+                              >
+                                ₹{Math.round(cost)}
+                              </Typography>
+                            </Box>
+                          </Box>
+                        );
+                      })}
                     </Box>
 
                     <Divider sx={{ my: 1.5, borderStyle: "dashed" }} />
@@ -2165,7 +2186,7 @@ export default function CustomerBookPage() {
                         </Box>
                       )}
                       {usingSplitMode && splitSuggestion ? (
-                        splitSuggestion.labs.map((lab, idx) => (
+                        splitSuggestion.labs.map((lab) => (
                           <Box
                             key={lab.branchId}
                             sx={{

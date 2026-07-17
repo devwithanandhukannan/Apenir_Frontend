@@ -26,6 +26,7 @@ import LabAppointmentsTab from "./tabs/appointments";
 import LabFinanceTab from "./tabs/finance";
 import LabBatchPaymentTab from "./tabs/batch_payment";
 import LabServicesTab from "./tabs/services";
+import LabPackagesTab from "./tabs/packages/packages";
 import { useLabDetails } from "./useLabDetails";
 import PaidIcon from "@mui/icons-material/Paid";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
@@ -624,12 +625,14 @@ export const LabDetails: React.FC = () => {
           <Tab label="Finance & Bills" value="finance" />
           <Tab label="Batch Payments" value="batch_payment" />
           <Tab label="Offered Services" value="services" />
+          <Tab label="Offered Packages" value="packages" />
         </Tabs>
 
         {activeTab === "appointments" && <LabAppointmentsTab labId={lab.id} />}
         {activeTab === "finance" && <LabFinanceTab labId={lab.id} />}
         {activeTab === "batch_payment" && <LabBatchPaymentTab labId={lab.id} />}
         {activeTab === "services" && <LabServicesTab labId={lab.id} />}
+        {activeTab === "packages" && <LabPackagesTab labId={lab.id} />}
       </Box>
 
       {/* Dialog for displaying all staff */}

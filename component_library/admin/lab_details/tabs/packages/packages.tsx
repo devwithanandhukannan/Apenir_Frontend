@@ -11,16 +11,16 @@ import Tooltip from "@mui/material/Tooltip";
 import Alert from "@mui/material/Alert";
 import Avatar from "@mui/material/Avatar";
 import SearchIcon from "@mui/icons-material/Search";
-import MedicalServicesIcon from "@mui/icons-material/MedicalServices";
+import InventoryIcon from "@mui/icons-material/Inventory";
 import EditIcon from "@mui/icons-material/Edit";
 import CheckIcon from "@mui/icons-material/Check";
 import CloseIcon from "@mui/icons-material/Close";
 import RefreshIcon from "@mui/icons-material/Refresh";
 import PercentIcon from "@mui/icons-material/Percent";
 import toast, { Toaster } from "react-hot-toast";
-import { useServices, AdminBranchServiceItem } from "./useServices";
+import { usePackages, AdminBranchPackageItem } from "./usePackages";
 
-interface LabServicesTabProps {
+interface LabPackagesTabProps {
   labId: string;
 }
 
@@ -28,8 +28,8 @@ interface LabServicesTabProps {
 // Inline commission editor row
 // ─────────────────────────────────────────────
 const CommissionCell: React.FC<{
-  item: AdminBranchServiceItem;
-  onSave: (serviceId: string, pct: number) => Promise<any>;
+  item: AdminBranchPackageItem;
+  onSave: (packageId: string, pct: number) => Promise<any>;
   saving: boolean;
 }> = ({ item, onSave, saving }) => {
   const [editing, setEditing] = useState(false);
@@ -47,7 +47,7 @@ const CommissionCell: React.FC<{
       toast.error("Commission must be 0–100.");
       return;
     }
-    const res = await onSave(item.serviceId, parsed);
+    const res = await onSave(item.packageId, parsed);
     if (res?.data?.success || res?.success) {
       toast.success("Commission updated.");
       setEditing(false);
@@ -131,12 +131,12 @@ const CommissionCell: React.FC<{
 // Active toggle for admin view
 // ─────────────────────────────────────────────
 const ActiveToggleCell: React.FC<{
-  item: AdminBranchServiceItem;
+  item: AdminBranchPackageItem;
   onToggle: (
-    serviceId: string,
+    packageId: string,
     payload: {
-      customPrice?: number | null;
-      customOriginalPrice?: number | null;
+      customPrice: number | null;
+      customOriginalPrice: number | null;
       customCommissionPct?: number | null;
       isActive: boolean;
     },
@@ -146,7 +146,7 @@ const ActiveToggleCell: React.FC<{
 
   const handleToggle = async () => {
     setLoading(true);
-    const res = await onToggle(item.serviceId, {
+    const res = await onToggle(item.packageId, {
       customPrice: item.customPrice ?? null,
       customOriginalPrice: item.customOriginalPrice ?? null,
       customCommissionPct: item.customCommissionPct ?? null,
@@ -156,8 +156,8 @@ const ActiveToggleCell: React.FC<{
     if (res?.data?.success || res?.success) {
       toast.success(
         item.isActive
-          ? "Service disabled for branch."
-          : "Service enabled for branch.",
+          ? "Package disabled for branch."
+          : "Package enabled for branch.",
       );
     } else {
       toast.error("Failed to update status.");
@@ -198,15 +198,12 @@ const ActiveToggleCell: React.FC<{
 };
 
 // ─────────────────────────────────────────────
-// Service row card
-// ─────────────────────────────────────────────
-// ─────────────────────────────────────────────
 // Inline Price Editor Cell
 // ─────────────────────────────────────────────
 const PriceCell: React.FC<{
-  item: AdminBranchServiceItem;
+  item: AdminBranchPackageItem;
   onSave: (
-    serviceId: string,
+    packageId: string,
     payload: {
       customPrice: number | null;
       customOriginalPrice: number | null;
@@ -244,7 +241,7 @@ const PriceCell: React.FC<{
       return;
     }
 
-    const res = await onSave(item.serviceId, {
+    const res = await onSave(item.packageId, {
       customPrice: p,
       customOriginalPrice: o,
       customCommissionPct: item.customCommissionPct ?? null,
@@ -358,16 +355,16 @@ const PriceCell: React.FC<{
 };
 
 // ─────────────────────────────────────────────
-// Service row card
+// Package row card
 // ─────────────────────────────────────────────
-const ServiceRow: React.FC<{
-  item: AdminBranchServiceItem;
-  onSaveCommission: (serviceId: string, pct: number) => Promise<any>;
+const PackageRow: React.FC<{
+  item: AdminBranchPackageItem;
+  onSaveCommission: (packageId: string, pct: number) => Promise<any>;
   onToggle: (
-    serviceId: string,
+    packageId: string,
     payload: {
-      customPrice?: number | null;
-      customOriginalPrice?: number | null;
+      customPrice: number | null;
+      customOriginalPrice: number | null;
       customCommissionPct?: number | null;
       isActive: boolean;
     },
@@ -389,7 +386,7 @@ const ServiceRow: React.FC<{
         flexWrap: "wrap",
       }}
     >
-      {/* Icon + name + category */}
+      {/* Icon + name */}
       <Box
         sx={{
           display: "flex",
@@ -407,50 +404,22 @@ const ServiceRow: React.FC<{
             flexShrink: 0,
           }}
         >
-          <MedicalServicesIcon sx={{ fontSize: 16, color: "secondary.main" }} />
+          <InventoryIcon sx={{ fontSize: 16, color: "secondary.main" }} />
         </Avatar>
         <Box sx={{ minWidth: 0 }}>
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              gap: 1,
-              flexWrap: "wrap",
-            }}
+          <Typography
+            variant="body2"
+            sx={{ fontWeight: 800, color: "text.primary", lineHeight: 1.3 }}
           >
-            <Typography
-              variant="body2"
-              sx={{ fontWeight: 800, color: "text.primary", lineHeight: 1.3 }}
-            >
-              {item.name}
-            </Typography>
-            <Chip
-              label={item.isCustom ? "BRANCH" : "PLATFORM"}
-              size="small"
-              sx={{
-                fontWeight: 800,
-                fontSize: "9px",
-                height: "18px",
-                borderRadius: "4px",
-                color: item.isCustom ? "#f59e0b" : "#6366f1",
-                bgcolor: item.isCustom
-                  ? "rgba(245,158,11,0.08)"
-                  : "rgba(99,102,241,0.08)",
-              }}
-            />
-          </Box>
-          <Chip
-            label={item.category}
-            size="small"
-            sx={{
-              mt: 0.4,
-              fontWeight: 600,
-              fontSize: "10px",
-              height: "18px",
-              color: "#475569",
-              bgcolor: "#f1f5f9",
-            }}
-          />
+            {item.name}
+          </Typography>
+          <Typography
+            variant="caption"
+            color="text.secondary"
+            sx={{ display: "block", mt: 0.2 }}
+          >
+            {item.serviceIds?.length || 0} tests included
+          </Typography>
         </Box>
       </Box>
 
@@ -475,28 +444,17 @@ const ServiceRow: React.FC<{
 // ─────────────────────────────────────────────
 // Main Tab Component
 // ─────────────────────────────────────────────
-export const LabServicesTab: React.FC<LabServicesTabProps> = ({ labId }) => {
+export const LabPackagesTab: React.FC<LabPackagesTabProps> = ({ labId }) => {
   const {
-    services,
+    packages,
     loading,
     saving,
     search,
     setSearch,
-    fetchServices,
+    fetchPackages,
     updateCommission,
-    overrideService,
-  } = useServices(labId);
-
-  // Group by category
-  const grouped = services.reduce<Record<string, AdminBranchServiceItem[]>>(
-    (acc, s) => {
-      const cat = s.category || "Uncategorized";
-      if (!acc[cat]) acc[cat] = [];
-      acc[cat].push(s);
-      return acc;
-    },
-    {},
-  );
+    overridePackage,
+  } = usePackages(labId);
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 3 }}>
@@ -514,16 +472,16 @@ export const LabServicesTab: React.FC<LabServicesTabProps> = ({ labId }) => {
       >
         <Box>
           <Typography variant="h6" sx={{ fontWeight: 800 }}>
-            Services Catalog
+            Packages Catalog
           </Typography>
           <Typography variant="body2" color="text.secondary">
-            View and manage all services this branch offers. Set custom
-            commission % per service.
+            View and manage all health packages this branch offers. Set custom
+            prices & commissions.
           </Typography>
         </Box>
         <Box sx={{ display: "flex", gap: 1.5, alignItems: "center" }}>
           <TextField
-            placeholder="Search services..."
+            placeholder="Search packages..."
             size="small"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -538,51 +496,12 @@ export const LabServicesTab: React.FC<LabServicesTabProps> = ({ labId }) => {
             }}
             sx={{ width: "240px" }}
           />
-          <Tooltip title="Refresh services list">
-            <IconButton onClick={fetchServices} size="small" disabled={loading}>
+          <Tooltip title="Refresh packages list">
+            <IconButton onClick={fetchPackages} size="small" disabled={loading}>
               <RefreshIcon fontSize="small" />
             </IconButton>
           </Tooltip>
         </Box>
-      </Box>
-
-      {/* Legend */}
-      <Box sx={{ display: "flex", gap: 2, flexWrap: "wrap" }}>
-        {[
-          {
-            label: "PLATFORM",
-            desc: "Admin-created service",
-            color: "#6366f1",
-            bg: "rgba(99,102,241,0.08)",
-          },
-          {
-            label: "BRANCH",
-            desc: "Custom service by this lab",
-            color: "#f59e0b",
-            bg: "rgba(245,158,11,0.08)",
-          },
-        ].map((l) => (
-          <Box
-            key={l.label}
-            sx={{ display: "flex", alignItems: "center", gap: 0.8 }}
-          >
-            <Chip
-              label={l.label}
-              size="small"
-              sx={{
-                fontWeight: 800,
-                fontSize: "9px",
-                height: "18px",
-                borderRadius: "4px",
-                color: l.color,
-                bgcolor: l.bg,
-              }}
-            />
-            <Typography variant="caption" color="text.secondary">
-              {l.desc}
-            </Typography>
-          </Box>
-        ))}
       </Box>
 
       {/* Table Header */}
@@ -607,8 +526,8 @@ export const LabServicesTab: React.FC<LabServicesTabProps> = ({ labId }) => {
           }}
         >
           {[
-            { label: "Service", flex: "1 1 200px" },
-            { label: "Price", minWidth: 140 },
+            { label: "Package", flex: "1 1 200px" },
+            { label: "Price", minWidth: 160 },
             { label: "Commission %", minWidth: 180 },
             { label: "Status", minWidth: 140 },
           ].map((col) => (
@@ -635,100 +554,26 @@ export const LabServicesTab: React.FC<LabServicesTabProps> = ({ labId }) => {
           <Box sx={{ display: "flex", justifyContent: "center", py: 6 }}>
             <CircularProgress size={32} color="secondary" />
           </Box>
-        ) : services.length === 0 ? (
+        ) : packages.length === 0 ? (
           <Alert severity="info" sx={{ m: 2, borderRadius: "8px" }}>
             {search
-              ? "No services match your search."
-              : "No services configured for this branch yet."}
+              ? "No packages match your search."
+              : "No health packages configured for this branch yet."}
           </Alert>
         ) : (
-          Object.keys(grouped)
-            .sort()
-            .map((category) => (
-              <Box key={category}>
-                <Box
-                  sx={{
-                    px: 2.5,
-                    py: 1,
-                    bgcolor: "rgba(0,0,0,0.02)",
-                    borderBottom: "1px solid var(--color-border)",
-                  }}
-                >
-                  <Typography
-                    variant="caption"
-                    sx={{
-                      fontWeight: 800,
-                      color: "text.secondary",
-                      letterSpacing: "0.05em",
-                      textTransform: "uppercase",
-                      fontSize: "10px",
-                    }}
-                  >
-                    {category} ({grouped[category].length})
-                  </Typography>
-                </Box>
-                {grouped[category].map((item) => (
-                  <ServiceRow
-                    key={item.serviceId}
-                    item={item}
-                    onSaveCommission={updateCommission}
-                    onToggle={overrideService}
-                    saving={saving}
-                  />
-                ))}
-              </Box>
-            ))
+          packages.map((item) => (
+            <PackageRow
+              key={item.packageId}
+              item={item}
+              onSaveCommission={updateCommission}
+              onToggle={overridePackage}
+              saving={saving}
+            />
+          ))
         )}
       </Box>
-
-      {/* Summary stats */}
-      {!loading && services.length > 0 && (
-        <Box sx={{ display: "flex", gap: 3, flexWrap: "wrap" }}>
-          {[
-            { label: "Total Services", value: services.length },
-            {
-              label: "Active",
-              value: services.filter((s) => s.isActive).length,
-              color: "#10b981",
-            },
-            {
-              label: "Platform",
-              value: services.filter((s) => !s.isCustom).length,
-              color: "#6366f1",
-            },
-            {
-              label: "Branch Custom",
-              value: services.filter((s) => s.isCustom).length,
-              color: "#f59e0b",
-            },
-          ].map((stat) => (
-            <Box
-              key={stat.label}
-              sx={{ display: "flex", flexDirection: "column" }}
-            >
-              <Typography
-                variant="h6"
-                sx={{
-                  fontWeight: 800,
-                  color: stat.color || "text.primary",
-                  lineHeight: 1,
-                }}
-              >
-                {stat.value}
-              </Typography>
-              <Typography
-                variant="caption"
-                color="text.secondary"
-                sx={{ fontWeight: 600 }}
-              >
-                {stat.label}
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-      )}
     </Box>
   );
 };
 
-export default LabServicesTab;
+export default LabPackagesTab;

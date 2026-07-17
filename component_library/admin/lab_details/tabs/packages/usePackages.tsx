@@ -1,11 +1,10 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
 
-export interface AdminBranchServiceItem {
-  branchServiceId?: string;
-  serviceId: string;
+export interface AdminBranchPackageItem {
+  branchPackageId?: string;
+  packageId: string;
   name: string;
-  category: string;
   description?: string;
   basePrice: number;
   originalPrice?: number | null;
@@ -15,106 +14,106 @@ export interface AdminBranchServiceItem {
   customCommissionPct?: number | null;
   isEnrolled: boolean;
   isActive: boolean;
-  isCustom: boolean;
+  serviceIds: string[];
 }
 
-export const useServices = (branchId: string) => {
+export const usePackages = (branchId: string) => {
   const { get, put } = useApi();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [services, setServices] = useState<AdminBranchServiceItem[]>([]);
+  const [packages, setPackages] = useState<AdminBranchPackageItem[]>([]);
   const [search, setSearch] = useState("");
 
-  const fetchServices = useCallback(async () => {
+  const fetchPackages = useCallback(async () => {
     if (!branchId) return;
     setLoading(true);
     try {
       const response = await get<any>({
-        endpoint: `/api/admin/branches/${branchId}/services`,
+        endpoint: `/api/admin/branches/${branchId}/packages`,
         requireAuth: true,
       });
       if (response.success && response.data?.data) {
-        setServices(response.data.data);
+        setPackages(response.data.data);
       } else {
-        setServices([]);
+        setPackages([]);
       }
     } catch (e) {
-      console.error("Failed to load branch services:", e);
-      setServices([]);
+      console.error("Failed to load branch packages:", e);
+      setPackages([]);
     } finally {
       setLoading(false);
     }
   }, [branchId, get]);
 
   useEffect(() => {
-    fetchServices();
-  }, [fetchServices]);
+    fetchPackages();
+  }, [fetchPackages]);
 
-  /** Update commission % for a specific service on this branch */
+  /** Update commission % for a specific package on this branch */
   const updateCommission = useCallback(
-    async (serviceId: string, commissionPct: number) => {
+    async (packageId: string, commissionPct: number) => {
       setSaving(true);
       const response = await put<any, any>({
-        endpoint: `/api/admin/branches/${branchId}/services/${serviceId}/commission`,
+        endpoint: `/api/admin/branches/${branchId}/packages/${packageId}/commission`,
         body: { commissionPct },
         requireAuth: true,
       });
       setSaving(false);
       if (response.success) {
-        await fetchServices();
+        await fetchPackages();
       }
       return response;
     },
-    [branchId, put, fetchServices],
+    [branchId, put, fetchPackages],
   );
 
-  /** Full override: price, original price, commission, active toggle for a service */
-  const overrideService = useCallback(
+  /** Full override: price, original price, commission, active toggle for a package */
+  const overridePackage = useCallback(
     async (
-      serviceId: string,
+      packageId: string,
       payload: {
-        customPrice?: number | null;
-        customOriginalPrice?: number | null;
+        customPrice: number | null;
+        customOriginalPrice: number | null;
         customCommissionPct?: number | null;
         isActive: boolean;
       },
     ) => {
       setSaving(true);
       const response = await put<any, any>({
-        endpoint: `/api/admin/branches/${branchId}/services/${serviceId}`,
+        endpoint: `/api/admin/branches/${branchId}/packages/${packageId}`,
         body: payload,
         requireAuth: true,
       });
       setSaving(false);
       if (response.success) {
-        await fetchServices();
+        await fetchPackages();
       }
       return response;
     },
-    [branchId, put, fetchServices],
+    [branchId, put, fetchPackages],
   );
 
-  const filteredServices = useMemo(() => {
+  const filteredPackages = useMemo(() => {
     const q = search.toLowerCase();
-    return services.filter(
-      (s) =>
+    return packages.filter(
+      (p) =>
         !q ||
-        s.name.toLowerCase().includes(q) ||
-        s.category.toLowerCase().includes(q),
+        p.name.toLowerCase().includes(q) ||
+        (p.description && p.description.toLowerCase().includes(q)),
     );
-  }, [services, search]);
+  }, [packages, search]);
 
   return {
-    services: filteredServices,
-    allServices: services,
+    packages: filteredPackages,
+    allPackages: packages,
     loading,
     saving,
     search,
     setSearch,
-    fetchServices,
+    fetchPackages,
     updateCommission,
-    overrideService,
+    overridePackage,
   };
 };
 
-export default useServices;
+export default usePackages;

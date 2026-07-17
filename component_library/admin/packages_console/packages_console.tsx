@@ -42,6 +42,7 @@ interface PackageItem {
   name: string;
   description: string | null;
   basePrice: number;
+  originalPrice?: number | null;
   platformCommissionPct: number;
   isActive: boolean;
   createdByBranchId: string | null;
@@ -53,6 +54,7 @@ const EMPTY_FORM = {
   name: "",
   description: "",
   basePrice: "" as number | "",
+  originalPrice: "" as number | "",
   commission: 15,
   serviceIds: [] as string[],
 };
@@ -279,6 +281,8 @@ export const PackagesConsole: React.FC = () => {
         name: form.name.trim(),
         description: form.description.trim() || null,
         basePrice: Number(form.basePrice),
+        originalPrice:
+          form.originalPrice !== "" ? Number(form.originalPrice) : null,
         platformCommissionPct: form.commission,
         serviceIds: form.serviceIds,
       },
@@ -302,6 +306,7 @@ export const PackagesConsole: React.FC = () => {
       name: pkg.name,
       description: pkg.description || "",
       basePrice: pkg.basePrice,
+      originalPrice: pkg.originalPrice ?? "",
       commission: pkg.platformCommissionPct,
       serviceIds: pkg.serviceIds || [],
       isActive: pkg.isActive,
@@ -323,6 +328,8 @@ export const PackagesConsole: React.FC = () => {
         description: editForm.description.trim() || null,
         basePrice:
           editForm.basePrice !== "" ? Number(editForm.basePrice) : null,
+        originalPrice:
+          editForm.originalPrice !== "" ? Number(editForm.originalPrice) : null,
         platformCommissionPct: editForm.commission,
         isActive: editForm.isActive,
         serviceIds: editForm.serviceIds,
@@ -580,18 +587,31 @@ export const PackagesConsole: React.FC = () => {
                         sx={{
                           display: "flex",
                           alignItems: "center",
-                          gap: 0.5,
-                          color: "secondary.main",
+                          gap: 1,
                           mt: 0.2,
                         }}
                       >
-                        <PaidIcon sx={{ fontSize: "16px" }} />
+                        <PaidIcon
+                          sx={{ fontSize: "16px", color: "secondary.main" }}
+                        />
                         <Typography
                           variant="subtitle2"
-                          sx={{ fontWeight: 800 }}
+                          sx={{ fontWeight: 800, color: "secondary.main" }}
                         >
                           ₹{pkg.basePrice}
                         </Typography>
+                        {pkg.originalPrice &&
+                          pkg.originalPrice > pkg.basePrice && (
+                            <Typography
+                              variant="caption"
+                              sx={{
+                                textDecoration: "line-through",
+                                color: "text.secondary",
+                              }}
+                            >
+                              ₹{pkg.originalPrice}
+                            </Typography>
+                          )}
                       </Box>
                     </Box>
                     <Box>
@@ -708,7 +728,7 @@ export const PackagesConsole: React.FC = () => {
               slotProps={{ inputLabel: { shrink: true } }}
             />
             <Grid container spacing={2}>
-              <Grid size={{ xs: 6 }}>
+              <Grid size={{ xs: 4 }}>
                 <TextField
                   label="Base Price (₹)"
                   type="number"
@@ -733,7 +753,31 @@ export const PackagesConsole: React.FC = () => {
                   }}
                 />
               </Grid>
-              <Grid size={{ xs: 6 }}>
+              <Grid size={{ xs: 4 }}>
+                <TextField
+                  label="Original Price (₹)"
+                  type="number"
+                  fullWidth
+                  disabled={saving}
+                  value={form.originalPrice}
+                  onChange={(e) =>
+                    setForm((f) => ({
+                      ...f,
+                      originalPrice:
+                        e.target.value === "" ? "" : Number(e.target.value),
+                    }))
+                  }
+                  slotProps={{
+                    inputLabel: { shrink: true },
+                    input: {
+                      startAdornment: (
+                        <InputAdornment position="start">₹</InputAdornment>
+                      ),
+                    },
+                  }}
+                />
+              </Grid>
+              <Grid size={{ xs: 4 }}>
                 <TextField
                   label="Commission (%)"
                   type="number"
@@ -851,7 +895,7 @@ export const PackagesConsole: React.FC = () => {
             slotProps={{ inputLabel: { shrink: true } }}
           />
           <Grid container spacing={2}>
-            <Grid size={{ xs: 6 }}>
+            <Grid size={{ xs: 4 }}>
               <TextField
                 label="Base Price (₹)"
                 type="number"
@@ -876,7 +920,31 @@ export const PackagesConsole: React.FC = () => {
                 }}
               />
             </Grid>
-            <Grid size={{ xs: 6 }}>
+            <Grid size={{ xs: 4 }}>
+              <TextField
+                label="Original Price (₹)"
+                type="number"
+                fullWidth
+                disabled={saving}
+                value={editForm.originalPrice}
+                onChange={(e) =>
+                  setEditForm((f) => ({
+                    ...f,
+                    originalPrice:
+                      e.target.value === "" ? "" : Number(e.target.value),
+                  }))
+                }
+                slotProps={{
+                  inputLabel: { shrink: true },
+                  input: {
+                    startAdornment: (
+                      <InputAdornment position="start">₹</InputAdornment>
+                    ),
+                  },
+                }}
+              />
+            </Grid>
+            <Grid size={{ xs: 4 }}>
               <TextField
                 label="Commission (%)"
                 type="number"

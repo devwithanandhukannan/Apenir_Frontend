@@ -1,10 +1,4 @@
-import React, {
-  useEffect,
-  useRef,
-  useState,
-  useCallback,
-  useMemo,
-} from "react";
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import TextField from "@mui/material/TextField";
@@ -33,6 +27,7 @@ interface MapLocationPickerProps {
   onChange: (location: MapLocation) => void;
   height?: number | string;
   label?: string;
+  labs?: Array<{ id: string; name: string; lat: number; lng: number }>;
 }
 
 interface NominatimResult {
@@ -76,10 +71,12 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
   onChange,
   height = 400,
   label = "Pick Location on Map",
+  labs = [],
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const leafletMapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
+  const labMarkersRef = useRef<any[]>([]);
   const [mapReady, setMapReady] = useState(false);
   const [locating, setLocating] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -191,6 +188,42 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Render nearby lab markers
+  useEffect(() => {
+    if (!leafletMapRef.current || !mapReady) return;
+    const map = leafletMapRef.current;
+
+    // Clear old lab markers
+    labMarkersRef.current.forEach((m) => m.remove());
+    labMarkersRef.current = [];
+
+    if (!labs || labs.length === 0) return;
+
+    import("leaflet").then((L) => {
+      const redIconInstance = new L.Icon({
+        iconUrl:
+          "https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png",
+        shadowUrl:
+          "https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png",
+        iconSize: [25, 41],
+        iconAnchor: [12, 41],
+        popupAnchor: [1, -34],
+        shadowSize: [41, 41],
+      });
+
+      labs.forEach((lab) => {
+        if (!lab.lat || !lab.lng || lab.lat === 0 || lab.lng === 0) return;
+        const marker = L.marker([lab.lat, lab.lng], {
+          icon: redIconInstance,
+          draggable: false,
+        })
+          .addTo(map)
+          .bindPopup(`<b>${lab.name}</b>`);
+        labMarkersRef.current.push(marker);
+      });
+    });
+  }, [labs, mapReady]);
 
   // Use browser Geolocation
   const handleUseCurrentLocation = useCallback(() => {
