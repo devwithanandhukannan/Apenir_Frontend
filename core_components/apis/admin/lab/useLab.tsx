@@ -545,6 +545,67 @@ export const useLab = () => {
     [post],
   );
 
+  // Get unbatched completed payments for current lab
+  const getCurrentLabUnbatchedPayments = useCallback(
+    async (
+      options?: Omit<BaseRequestOptions<any>, "endpoint" | "requireAuth">,
+    ) => {
+      const response = await get<any>({
+        endpoint: "/api/lab/unbatched-payments",
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data: any) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err: any) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [get],
+  );
+
+  // Request a payment batch payout
+  const requestLabPayoutBatch = useCallback(
+    async (
+      payload: { paymentIds: string[]; notes?: string | null },
+      options?: Omit<
+        MutationRequestOptions<any, any>,
+        "endpoint" | "body" | "requireAuth"
+      >,
+    ) => {
+      const response = await post<any, any>({
+        endpoint: "/api/lab/payment-batches",
+        body: payload,
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data: any) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err: any) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: options?.params,
+      });
+
+      return response;
+    },
+    [post],
+  );
+
   // Update a branch service override (toggle active, set custom price)
   const updateLabService = useCallback(
     async (
@@ -617,6 +678,8 @@ export const useLab = () => {
     getCurrentLabPaymentBatchDetails,
     confirmBatchReceipt,
     rejectBatchReceipt,
+    getCurrentLabUnbatchedPayments,
+    requestLabPayoutBatch,
   };
 };
 

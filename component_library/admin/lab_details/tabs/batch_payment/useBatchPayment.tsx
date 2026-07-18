@@ -70,24 +70,26 @@ export const useBatchPayment = (labId: string) => {
       const apiBatches = response.data.data.items;
 
       const mapped: BatchPaymentItem[] = apiBatches.map((pb: any) => {
+        // Map C# PaymentBatchStatus (1 = Initiated, 2 = Paid, 3 = Settled, 4 = Abandoned)
         let statusString: "Transferred" | "Processing" | "Failed" =
           "Processing";
-        // Map C# PaymentBatchStatus (1 = Initiated, 2 = Settled, 3 = Abandoned)
         const statusVal = pb.status;
         if (
-          statusVal === 2 ||
+          statusVal === 3 ||
           statusVal === "Settled" ||
           statusVal === "settled" ||
           statusVal === "Transferred"
         ) {
           statusString = "Transferred";
         } else if (
-          statusVal === 3 ||
+          statusVal === 4 ||
           statusVal === "Abandoned" ||
           statusVal === "abandoned" ||
           statusVal === "Failed"
         ) {
           statusString = "Failed";
+        } else {
+          statusString = "Processing";
         }
 
         return {

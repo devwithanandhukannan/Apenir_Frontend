@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -20,6 +20,9 @@ import VisibilityIcon from "@mui/icons-material/Visibility";
 import WarningIcon from "@mui/icons-material/Warning";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CancelIcon from "@mui/icons-material/Cancel";
+import Checkbox from "@mui/material/Checkbox";
+import TextField from "@mui/material/TextField";
+import Stack from "@mui/material/Stack";
 import toast from "react-hot-toast";
 import ResponsiveGrid from "@/shared_features/responsive_grid";
 import { usePaymentBatch, LabPaymentBatchItem } from "./usePaymentBatch";
@@ -36,6 +39,11 @@ const STATUS_STYLE: Record<
     color: "#2563eb",
     bg: "#eff6ff",
     border: "rgba(37,99,235,0.25)",
+  },
+  Paid: {
+    color: "#d97706",
+    bg: "#fef3c7",
+    border: "rgba(217,119,6,0.25)",
   },
   Settled: { color: "#10b981", bg: "#ecfdf5", border: "rgba(16,185,129,0.25)" },
   Abandoned: {
@@ -64,12 +72,21 @@ export const PaymentBatch: React.FC = () => {
     handleApproveBatch,
     handleRejectBatch,
     setBatchDetails,
+    unbatchedPayments,
+    loadingUnbatched,
+    fetchUnbatchedPayments,
+    handleRequestPayout,
   } = usePaymentBatch();
+
+  const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
+  const [selectedPaymentIds, setSelectedPaymentIds] = useState<string[]>([]);
+  const [requestNotes, setRequestNotes] = useState("");
 
   const getStatusLabel = (status: number) => {
     if (status === 1) return "Initiated";
-    if (status === 2) return "Settled";
-    if (status === 3) return "Abandoned";
+    if (status === 2) return "Paid";
+    if (status === 3) return "Settled";
+    if (status === 4) return "Abandoned";
     return `Status ${status}`;
   };
 
@@ -216,6 +233,7 @@ export const PaymentBatch: React.FC = () => {
         width: 160,
         options: [
           { value: "Initiated", label: "Initiated" },
+          { value: "Paid", label: "Paid" },
           { value: "Settled", label: "Settled" },
           { value: "Abandoned", label: "Abandoned" },
         ],
@@ -267,27 +285,51 @@ export const PaymentBatch: React.FC = () => {
             verify individual appointment payouts at lab end.
           </Typography>
         </Box>
-        <Button
-          id="payment-batches-refresh-btn"
-          variant="outlined"
-          color="inherit"
-          startIcon={<RefreshIcon />}
-          onClick={fetchBatches}
-          sx={{
-            textTransform: "none",
-            fontWeight: 600,
-            borderRadius: "8px",
-            borderColor: "var(--color-border)",
-            color: "text.primary",
-            px: 2,
-            py: 1,
-            "&:hover": {
-              backgroundColor: "rgba(0,0,0,0.02)",
-            },
-          }}
-        >
-          Refresh
-        </Button>
+        <Stack direction="row" spacing={2}>
+          <Button
+            id="request-payout-btn"
+            variant="contained"
+            color="secondary"
+            onClick={() => {
+              setSelectedPaymentIds([]);
+              setRequestNotes("");
+              fetchUnbatchedPayments();
+              setIsRequestDialogOpen(true);
+            }}
+            sx={{
+              textTransform: "none",
+              fontWeight: 700,
+              borderRadius: "8px",
+              px: 3,
+            }}
+          >
+            Request Payout
+          </Button>
+          <Button
+            id="payment-batches-refresh-btn"
+            variant="outlined"
+            color="inherit"
+            startIcon={<RefreshIcon />}
+            onClick={() => {
+              fetchBatches();
+              fetchUnbatchedPayments();
+            }}
+            sx={{
+              textTransform: "none",
+              fontWeight: 600,
+              borderRadius: "8px",
+              borderColor: "var(--color-border)",
+              color: "text.primary",
+              px: 2,
+              py: 1,
+              "&:hover": {
+                backgroundColor: "rgba(0,0,0,0.02)",
+              },
+            }}
+          >
+            Refresh
+          </Button>
+        </Stack>
       </Box>
 
       {/* Grid displaying the list of payment batches */}
@@ -470,8 +512,8 @@ export const PaymentBatch: React.FC = () => {
                 </TableContainer>
               </Box>
 
-              {/* Status Action Warnings (Only show if status is Initiated: e.g. status === 1) */}
-              {selectedBatch?.status === 1 && (
+              {/* Status Action Warnings (Only show if status is Paid: e.g. status === 2) */}
+              {selectedBatch?.status === 2 && (
                 <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
                   {/* Approve Warning Card */}
                   <Box
@@ -556,7 +598,7 @@ export const PaymentBatch: React.FC = () => {
         </DialogContent>
         <DialogActions sx={{ px: 3, py: 2, justifyContent: "space-between" }}>
           <Box>
-            {selectedBatch?.status === 1 && (
+            {selectedBatch?.status === 2 && (
               <Box sx={{ display: "flex", gap: 1.5 }}>
                 <Button
                   id="reject-batch-btn"
@@ -602,6 +644,222 @@ export const PaymentBatch: React.FC = () => {
             sx={{ fontWeight: 700, textTransform: "none", borderRadius: "8px" }}
           >
             Close
+          </Button>
+        </DialogActions>
+      </Dialog>
+
+      {/* Request Payout Dialog */}
+      <Dialog
+        open={isRequestDialogOpen}
+        onClose={() => setIsRequestDialogOpen(false)}
+        maxWidth="md"
+        fullWidth
+        slotProps={{
+          paper: {
+            sx: { borderRadius: "16px", p: 1 },
+          },
+        }}
+      >
+        <DialogTitle sx={{ fontWeight: 800 }}>Request Batch Payout</DialogTitle>
+        <DialogContent
+          dividers
+          sx={{ display: "flex", flexDirection: "column", gap: 3 }}
+        >
+          <Typography variant="body2" color="text.secondary">
+            Select the completed bookings you want to request payout for. The
+            platform admin will review your request, transfer the amount
+            manually, and mark it as Paid.
+          </Typography>
+
+          {loadingUnbatched ? (
+            <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
+              <CircularProgress color="secondary" />
+            </Box>
+          ) : unbatchedPayments.length > 0 ? (
+            <TableContainer
+              component={Paper}
+              elevation={0}
+              sx={{
+                border: "1px solid #e2e8f0",
+                borderRadius: "8px",
+                maxHeight: 300,
+              }}
+            >
+              <Table size="small" stickyHeader>
+                <TableHead>
+                  <TableRow>
+                    <TableCell padding="checkbox" sx={{ bgcolor: "#f8fafc" }}>
+                      <Checkbox
+                        indeterminate={
+                          selectedPaymentIds.length > 0 &&
+                          selectedPaymentIds.length < unbatchedPayments.length
+                        }
+                        checked={
+                          unbatchedPayments.length > 0 &&
+                          selectedPaymentIds.length === unbatchedPayments.length
+                        }
+                        onChange={(e) => {
+                          if (e.target.checked) {
+                            setSelectedPaymentIds(
+                              unbatchedPayments.map((p) => p.paymentId),
+                            );
+                          } else {
+                            setSelectedPaymentIds([]);
+                          }
+                        }}
+                      />
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, bgcolor: "#f8fafc" }}>
+                      Booking Ref
+                    </TableCell>
+                    <TableCell sx={{ fontWeight: 800, bgcolor: "#f8fafc" }}>
+                      Client Name
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 800, bgcolor: "#f8fafc" }}
+                      align="right"
+                    >
+                      Gross (₹)
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 800, bgcolor: "#f8fafc" }}
+                      align="right"
+                    >
+                      Commission (₹)
+                    </TableCell>
+                    <TableCell
+                      sx={{ fontWeight: 800, bgcolor: "#f8fafc" }}
+                      align="right"
+                    >
+                      Net Payout (₹)
+                    </TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {unbatchedPayments.map((p) => (
+                    <TableRow key={p.paymentId} hover>
+                      <TableCell padding="checkbox">
+                        <Checkbox
+                          checked={selectedPaymentIds.includes(p.paymentId)}
+                          onChange={() => {
+                            setSelectedPaymentIds((prev) =>
+                              prev.includes(p.paymentId)
+                                ? prev.filter((id) => id !== p.paymentId)
+                                : [...prev, p.paymentId],
+                            );
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell sx={{ fontWeight: 700 }}>
+                        {p.appointmentNumber}
+                      </TableCell>
+                      <TableCell>{p.customerName || "Client"}</TableCell>
+                      <TableCell align="right">₹{p.totalAmount}</TableCell>
+                      <TableCell align="right" sx={{ color: "text.secondary" }}>
+                        ₹{p.platformCommission}
+                      </TableCell>
+                      <TableCell
+                        align="right"
+                        sx={{ fontWeight: 700, color: "#00897b" }}
+                      >
+                        ₹{p.labPayout}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          ) : (
+            <Box
+              sx={{
+                border: "1px dashed #e2e8f0",
+                borderRadius: "8px",
+                py: 4,
+                textAlign: "center",
+              }}
+            >
+              <Typography variant="body2" color="text.secondary">
+                No unpaid completed bookings available for payout request.
+              </Typography>
+            </Box>
+          )}
+
+          {selectedPaymentIds.length > 0 && (
+            <Box
+              sx={{
+                bgcolor: "#f8fafc",
+                p: 2,
+                borderRadius: "8px",
+                border: "1px solid #e2e8f0",
+              }}
+            >
+              <Stack direction="row" sx={{ justifyContent: "space-between" }}>
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Selected Bookings:
+                </Typography>
+                <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
+                  {selectedPaymentIds.length}
+                </Typography>
+              </Stack>
+              <Stack
+                direction="row"
+                sx={{ justifyContent: "space-between", mt: 1 }}
+              >
+                <Typography variant="subtitle2" sx={{ fontWeight: 700 }}>
+                  Total Net Payout Owed:
+                </Typography>
+                <Typography
+                  variant="subtitle2"
+                  sx={{ fontWeight: 800, color: "#00897b" }}
+                >
+                  ₹
+                  {unbatchedPayments
+                    .filter((p) => selectedPaymentIds.includes(p.paymentId))
+                    .reduce((acc, p) => acc + p.labPayout, 0)
+                    .toFixed(2)}
+                </Typography>
+              </Stack>
+            </Box>
+          )}
+
+          <TextField
+            label="Additional Request Notes"
+            placeholder="Provide any context or account details for the platform admin..."
+            multiline
+            rows={2}
+            fullWidth
+            value={requestNotes}
+            onChange={(e) => setRequestNotes(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions sx={{ px: 3, py: 2 }}>
+          <Button
+            onClick={() => setIsRequestDialogOpen(false)}
+            variant="outlined"
+            color="inherit"
+            sx={{ fontWeight: 700, textTransform: "none", borderRadius: "8px" }}
+          >
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            color="secondary"
+            disabled={actionLoading || selectedPaymentIds.length === 0}
+            onClick={async () => {
+              const res = await handleRequestPayout(
+                selectedPaymentIds,
+                requestNotes,
+              );
+              if (res.success) {
+                toast.success(res.message);
+                setIsRequestDialogOpen(false);
+              } else {
+                toast.error(res.message);
+              }
+            }}
+            sx={{ fontWeight: 700, textTransform: "none", borderRadius: "8px" }}
+          >
+            Submit Request
           </Button>
         </DialogActions>
       </Dialog>

@@ -100,7 +100,13 @@ export const PayrollConsole: React.FC = () => {
 
   // Helper date setter functions
   const setQuickDates = (
-    type: "today" | "yesterday" | "this-month" | "last-month",
+    type:
+      | "today"
+      | "yesterday"
+      | "this-week"
+      | "last-week"
+      | "this-month"
+      | "everything",
   ) => {
     const today = new Date();
     const formatDate = (date: Date) => date.toISOString().split("T")[0];
@@ -116,6 +122,26 @@ export const PayrollConsole: React.FC = () => {
         setStartDate(formatDate(yesterday));
         setEndDate(formatDate(yesterday));
         break;
+      case "this-week": {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - distanceToMonday);
+        setStartDate(formatDate(monday));
+        setEndDate(formatDate(today));
+        break;
+      }
+      case "last-week": {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const lastMonday = new Date(today);
+        lastMonday.setDate(today.getDate() - distanceToMonday - 7);
+        const lastSunday = new Date(lastMonday);
+        lastSunday.setDate(lastMonday.getDate() + 6);
+        setStartDate(formatDate(lastMonday));
+        setEndDate(formatDate(lastSunday));
+        break;
+      }
       case "this-month":
         const firstDayMonth = new Date(
           today.getFullYear(),
@@ -125,15 +151,9 @@ export const PayrollConsole: React.FC = () => {
         setStartDate(formatDate(firstDayMonth));
         setEndDate(formatDate(today));
         break;
-      case "last-month":
-        const firstDayLast = new Date(
-          today.getFullYear(),
-          today.getMonth() - 1,
-          1,
-        );
-        const lastDayLast = new Date(today.getFullYear(), today.getMonth(), 0);
-        setStartDate(formatDate(firstDayLast));
-        setEndDate(formatDate(lastDayLast));
+      case "everything":
+        setStartDate("");
+        setEndDate("");
         break;
     }
   };
@@ -167,9 +187,43 @@ export const PayrollConsole: React.FC = () => {
     }
   };
 
+  const getLabSummaryList = () => {
+    const summaryMap: Record<
+      string,
+      {
+        labName: string;
+        gross: number;
+        comm: number;
+        net: number;
+        count: number;
+      }
+    > = {};
+
+    payouts.forEach((p) => {
+      const key = p.branchId || "unknown";
+      if (!summaryMap[key]) {
+        summaryMap[key] = {
+          labName: p.branchName || "Unknown Branch",
+          gross: 0,
+          comm: 0,
+          net: 0,
+          count: 0,
+        };
+      }
+      summaryMap[key].gross += p.totalAmount;
+      summaryMap[key].comm += p.platformCommission;
+      summaryMap[key].net += p.labPayout;
+      summaryMap[key].count += 1;
+    });
+
+    return Object.values(summaryMap);
+  };
+
   // Calculations for selected payouts
   const selectedPayoutsDetails = () => {
-    const selected = payouts.filter((p) => selectedPayoutIds.includes(p.id));
+    const selected = payouts.filter((p) =>
+      selectedPayoutIds.includes(p.paymentId),
+    );
     const gross = selected.reduce((acc, p) => acc + p.totalAmount, 0);
     const comm = selected.reduce((acc, p) => acc + p.platformCommission, 0);
     const net = selected.reduce((acc, p) => acc + p.labPayout, 0);
@@ -178,15 +232,17 @@ export const PayrollConsole: React.FC = () => {
 
   const handleSelectAll = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.checked) {
-      setSelectedPayoutIds(payouts.map((p) => p.id));
+      setSelectedPayoutIds(payouts.map((p) => p.paymentId));
     } else {
       setSelectedPayoutIds([]);
     }
   };
 
-  const handleToggleSelect = (id: string) => {
+  const handleToggleSelect = (paymentId: string) => {
     setSelectedPayoutIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+      prev.includes(paymentId)
+        ? prev.filter((x) => x !== paymentId)
+        : [...prev, paymentId],
     );
   };
 
@@ -196,40 +252,71 @@ export const PayrollConsole: React.FC = () => {
       return;
     }
 
-    // 1. Create the Batch
-    const createRes = await post<any, any>({
-      endpoint: "/api/admin/batch-payments",
-      body: {
-        branchId: selectedLabId,
-        paymentIds: selectedPayoutIds,
-      },
-      requireAuth: true,
-    });
+    const selectedPayouts = payouts.filter((p) =>
+      selectedPayoutIds.includes(p.paymentId),
+    );
+    const uniqueBranches = Array.from(
+      new Set(selectedPayouts.map((p) => p.branchId)),
+    );
 
-    if (createRes.success && createRes.data?.success && createRes.data?.data) {
-      const batchId = createRes.data.data.id;
+    if (uniqueBranches.length === 0) {
+      toast.error("Invalid payout selection.");
+      return;
+    }
 
-      // 2. Mark Batch as Paid instantly
-      const payRes = await post<any, any>({
-        endpoint: `/api/admin/batch-payments/${batchId}/pay`,
-        body: {},
+    let successCount = 0;
+    let failCount = 0;
+
+    for (const branchId of uniqueBranches) {
+      const branchPayoutIds = selectedPayouts
+        .filter((p) => p.branchId === branchId)
+        .map((p) => p.paymentId);
+
+      const createRes = await post<any, any>({
+        endpoint: "/api/admin/batch-payments",
+        body: {
+          branchId: branchId,
+          paymentIds: branchPayoutIds,
+        },
         requireAuth: true,
       });
 
-      if (payRes.success && payRes.data?.success) {
-        toast.success(
-          "Payment batch created and processed to Paid successfully!",
-        );
-        setPayouts([]);
-        setSelectedPayoutIds([]);
+      if (
+        createRes.success &&
+        createRes.data?.success &&
+        createRes.data?.data
+      ) {
+        const batchId = createRes.data.data.id;
+
+        const payRes = await post<any, any>({
+          endpoint: `/api/admin/batch-payments/${batchId}/pay`,
+          body: {},
+          requireAuth: true,
+        });
+
+        if (payRes.success && payRes.data?.success) {
+          successCount++;
+        } else {
+          failCount++;
+        }
       } else {
-        toast.error(
-          payRes.data?.message ||
-            "Batch created, but failed to transition status to Paid.",
-        );
+        failCount++;
       }
+    }
+
+    if (failCount === 0) {
+      toast.success(
+        `Successfully processed ${successCount} laboratory batch payout(s)!`,
+      );
+      setPayouts([]);
+      setSelectedPayoutIds([]);
+    } else if (successCount > 0) {
+      toast.success(
+        `Processed ${successCount} batch payout(s) successfully, but ${failCount} failed.`,
+      );
+      handleRetrievePayouts();
     } else {
-      toast.error(createRes.data?.message || "Failed to create payment batch.");
+      toast.error("Failed to process batch payouts.");
     }
   };
 
@@ -285,12 +372,14 @@ export const PayrollConsole: React.FC = () => {
 
   const getStatusChipColor = (status: number) => {
     switch (status) {
-      case 0: // Initiated
+      case 1: // Initiated
         return "primary";
       case 2: // Paid
         return "warning";
-      case 1: // Settled
+      case 3: // Settled
         return "success";
+      case 4: // Abandoned
+        return "error";
       default:
         return "default";
     }
@@ -298,12 +387,14 @@ export const PayrollConsole: React.FC = () => {
 
   const getStatusText = (status: number) => {
     switch (status) {
-      case 0:
+      case 1:
         return "Initiated";
       case 2:
         return "Paid";
-      case 1:
+      case 3:
         return "Settled";
+      case 4:
+        return "Abandoned";
       default:
         return "Unknown";
     }
@@ -380,6 +471,7 @@ export const PayrollConsole: React.FC = () => {
                     label="Select Laboratory Branch"
                     onChange={(e) => setSelectedLabId(e.target.value)}
                   >
+                    <MenuItem value="all">All Laboratories</MenuItem>
                     {labs.map((lab) => (
                       <MenuItem key={lab.id} value={lab.id}>
                         {lab.name} ({lab.city})
@@ -447,6 +539,30 @@ export const PayrollConsole: React.FC = () => {
                       fullWidth
                       size="small"
                       sx={{ textTransform: "none", fontWeight: 600 }}
+                      onClick={() => setQuickDates("this-week")}
+                    >
+                      This Week
+                    </Button>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Button
+                      variant="outlined"
+                      color="inherit"
+                      fullWidth
+                      size="small"
+                      sx={{ textTransform: "none", fontWeight: 600 }}
+                      onClick={() => setQuickDates("last-week")}
+                    >
+                      Last Week
+                    </Button>
+                  </Grid>
+                  <Grid size={{ xs: 6 }}>
+                    <Button
+                      variant="outlined"
+                      color="inherit"
+                      fullWidth
+                      size="small"
+                      sx={{ textTransform: "none", fontWeight: 600 }}
                       onClick={() => setQuickDates("this-month")}
                     >
                       This Month
@@ -459,9 +575,9 @@ export const PayrollConsole: React.FC = () => {
                       fullWidth
                       size="small"
                       sx={{ textTransform: "none", fontWeight: 600 }}
-                      onClick={() => setQuickDates("last-month")}
+                      onClick={() => setQuickDates("everything")}
                     >
-                      Last Month
+                      Everything
                     </Button>
                   </Grid>
                 </Grid>
@@ -496,6 +612,118 @@ export const PayrollConsole: React.FC = () => {
               </Box>
             ) : payouts.length > 0 ? (
               <Stack spacing={3}>
+                {selectedLabId === "all" && (
+                  <Card
+                    sx={{
+                      border: "1px solid var(--color-border)",
+                      borderRadius: "16px",
+                      boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
+                      mb: 2,
+                    }}
+                  >
+                    <CardContent sx={{ p: 3 }}>
+                      <Typography variant="h6" sx={{ fontWeight: 800, mb: 2 }}>
+                        Laboratory-Wise Summary (Platform Profit & Net Owed)
+                      </Typography>
+                      <TableContainer component={Box}>
+                        <Table size="small">
+                          <TableHead sx={{ bgcolor: "rgba(0,0,0,0.02)" }}>
+                            <TableRow>
+                              <TableCell sx={{ fontWeight: 700 }}>
+                                Laboratory Branch
+                              </TableCell>
+                              <TableCell sx={{ fontWeight: 700 }} align="right">
+                                Bookings
+                              </TableCell>
+                              <TableCell sx={{ fontWeight: 700 }} align="right">
+                                Gross
+                              </TableCell>
+                              <TableCell sx={{ fontWeight: 700 }} align="right">
+                                Platform Profit
+                              </TableCell>
+                              <TableCell sx={{ fontWeight: 700 }} align="right">
+                                Net Owed
+                              </TableCell>
+                            </TableRow>
+                          </TableHead>
+                          <TableBody>
+                            {getLabSummaryList().map((item, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell sx={{ fontWeight: 600 }}>
+                                  {item.labName}
+                                </TableCell>
+                                <TableCell align="right">
+                                  {item.count}
+                                </TableCell>
+                                <TableCell align="right">
+                                  ₹{item.gross.toFixed(2)}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{
+                                    color: "success.main",
+                                    fontWeight: 600,
+                                  }}
+                                >
+                                  ₹{item.comm.toFixed(2)}
+                                </TableCell>
+                                <TableCell
+                                  align="right"
+                                  sx={{
+                                    fontWeight: 700,
+                                    color: "secondary.main",
+                                  }}
+                                >
+                                  ₹{item.net.toFixed(2)}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                            {/* Grand Total Row */}
+                            <TableRow sx={{ bgcolor: "rgba(0,0,0,0.01)" }}>
+                              <TableCell sx={{ fontWeight: 800 }}>
+                                Grand Total
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                {getLabSummaryList().reduce(
+                                  (acc, item) => acc + item.count,
+                                  0,
+                                )}
+                              </TableCell>
+                              <TableCell align="right" sx={{ fontWeight: 800 }}>
+                                ₹
+                                {getLabSummaryList()
+                                  .reduce((acc, item) => acc + item.gross, 0)
+                                  .toFixed(2)}
+                              </TableCell>
+                              <TableCell
+                                align="right"
+                                sx={{ fontWeight: 800, color: "success.main" }}
+                              >
+                                ₹
+                                {getLabSummaryList()
+                                  .reduce((acc, item) => acc + item.comm, 0)
+                                  .toFixed(2)}
+                              </TableCell>
+                              <TableCell
+                                align="right"
+                                sx={{
+                                  fontWeight: 800,
+                                  color: "secondary.main",
+                                }}
+                              >
+                                ₹
+                                {getLabSummaryList()
+                                  .reduce((acc, item) => acc + item.net, 0)
+                                  .toFixed(2)}
+                              </TableCell>
+                            </TableRow>
+                          </TableBody>
+                        </Table>
+                      </TableContainer>
+                    </CardContent>
+                  </Card>
+                )}
+
                 <TableContainer
                   component={Paper}
                   sx={{
@@ -523,6 +751,11 @@ export const PayrollConsole: React.FC = () => {
                         <TableCell sx={{ fontWeight: 700 }}>
                           Booking Ref
                         </TableCell>
+                        {selectedLabId === "all" && (
+                          <TableCell sx={{ fontWeight: 700 }}>
+                            Laboratory
+                          </TableCell>
+                        )}
                         <TableCell sx={{ fontWeight: 700 }}>
                           Paid Date
                         </TableCell>
@@ -539,16 +772,23 @@ export const PayrollConsole: React.FC = () => {
                     </TableHead>
                     <TableBody>
                       {payouts.map((p) => (
-                        <TableRow key={p.id} hover>
+                        <TableRow key={p.paymentId} hover>
                           <TableCell padding="checkbox">
                             <Checkbox
-                              checked={selectedPayoutIds.includes(p.id)}
-                              onChange={() => handleToggleSelect(p.id)}
+                              checked={selectedPayoutIds.includes(p.paymentId)}
+                              onChange={() => handleToggleSelect(p.paymentId)}
                             />
                           </TableCell>
                           <TableCell sx={{ fontWeight: 600 }}>
-                            {p.appointmentNumber || p.id.substring(0, 8)}
+                            {p.appointmentNumber || p.paymentId.substring(0, 8)}
                           </TableCell>
+                          {selectedLabId === "all" && (
+                            <TableCell
+                              sx={{ fontWeight: 600, color: "text.secondary" }}
+                            >
+                              {p.branchName || "Unknown Branch"}
+                            </TableCell>
+                          )}
                           <TableCell>
                             {p.paidAt
                               ? new Date(p.paidAt).toLocaleDateString("en-IN", {
@@ -773,7 +1013,7 @@ export const PayrollConsole: React.FC = () => {
                           >
                             Details
                           </Button>
-                          {b.status === 0 && (
+                          {b.status === 1 && (
                             <Button
                               variant="contained"
                               color="secondary"
@@ -784,7 +1024,7 @@ export const PayrollConsole: React.FC = () => {
                               Pay Batch
                             </Button>
                           )}
-                          {b.status !== 1 && (
+                          {b.status !== 3 && b.status !== 4 && (
                             <Button
                               variant="outlined"
                               color="error"

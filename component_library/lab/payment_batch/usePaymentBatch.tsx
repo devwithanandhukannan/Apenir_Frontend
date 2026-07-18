@@ -20,6 +20,8 @@ export const usePaymentBatch = () => {
     getCurrentLabPaymentBatchDetails,
     confirmBatchReceipt,
     rejectBatchReceipt,
+    getCurrentLabUnbatchedPayments,
+    requestLabPayoutBatch,
   } = useLab();
 
   const { controllers } = useAbortController(BATCH_KEYS);
@@ -34,6 +36,10 @@ export const usePaymentBatch = () => {
   const [batchDetails, setBatchDetails] = useState<any | null>(null);
   const [detailsLoading, setDetailsLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
+
+  // Unbatched completed payments
+  const [unbatchedPayments, setUnbatchedPayments] = useState<any[]>([]);
+  const [loadingUnbatched, setLoadingUnbatched] = useState(false);
 
   // Filters state
   const [filters, setFilters] = useState<GridFilters>({
@@ -122,7 +128,7 @@ export const usePaymentBatch = () => {
             batchNumber:
               selectedBatch?.batchNumber ||
               `BAT-${batchId.substring(0, 6).toUpperCase()}`,
-            status: selectedBatch?.status ?? 0,
+            status: selectedBatch?.status ?? 1,
             totalNetPayout: selectedBatch?.totalNetPayout ?? 0,
             totalGrossAmount: selectedBatch?.totalGrossAmount ?? 0,
             totalPlatformCommission:
@@ -136,15 +142,6 @@ export const usePaymentBatch = () => {
                 grossAmount: 1200,
                 commission: 120,
                 netPayout: 1080,
-                paymentStatus: "Pending Confirmation",
-              },
-              {
-                id: "apt-2",
-                appointmentNumber: "APT-93821",
-                customerName: "Ann Mary",
-                grossAmount: 850,
-                commission: 85,
-                netPayout: 765,
                 paymentStatus: "Pending Confirmation",
               },
             ],
@@ -162,22 +159,12 @@ export const usePaymentBatch = () => {
           batchNumber:
             selectedBatch?.batchNumber ||
             `BAT-${batchId.substring(0, 6).toUpperCase()}`,
-          status: selectedBatch?.status ?? 0,
+          status: selectedBatch?.status ?? 1,
           totalNetPayout: selectedBatch?.totalNetPayout ?? 0,
           totalGrossAmount: selectedBatch?.totalGrossAmount ?? 0,
           totalPlatformCommission: selectedBatch?.totalPlatformCommission ?? 0,
           createdAt: selectedBatch?.createdAt || new Date().toISOString(),
-          appointments: [
-            {
-              id: "apt-1",
-              appointmentNumber: "APT-88271",
-              customerName: "Anandhu Kannan",
-              grossAmount: 1200,
-              commission: 120,
-              netPayout: 1080,
-              paymentStatus: "Pending Confirmation",
-            },
-          ],
+          appointments: [],
         });
         setDetailsLoading(false);
       }
@@ -255,9 +242,59 @@ export const usePaymentBatch = () => {
     }
   }, [selectedBatch, rejectBatchReceipt, fetchBatches]);
 
+  // Fetch unbatched completed payments
+  const fetchUnbatchedPayments = useCallback(async () => {
+    setLoadingUnbatched(true);
+    try {
+      const response = await getCurrentLabUnbatchedPayments();
+      if (response.success && response.data && response.data.data) {
+        setUnbatchedPayments(response.data.data);
+      } else {
+        setUnbatchedPayments([]);
+      }
+    } catch (e) {
+      console.error("Failed to load unbatched payments:", e);
+      setUnbatchedPayments([]);
+    } finally {
+      setLoadingUnbatched(false);
+    }
+  }, [getCurrentLabUnbatchedPayments]);
+
+  // Request batch payout
+  const handleRequestPayout = useCallback(
+    async (paymentIds: string[], notes?: string | null) => {
+      setActionLoading(true);
+      try {
+        const response = await requestLabPayoutBatch({ paymentIds, notes });
+        if (response.success) {
+          fetchBatches();
+          fetchUnbatchedPayments();
+          return {
+            success: true,
+            message: "Payout request submitted successfully!",
+          };
+        } else {
+          return {
+            success: false,
+            message:
+              response.data?.message ||
+              response.error?.message ||
+              "Failed to submit payout request.",
+          };
+        }
+      } catch (e: any) {
+        return { success: false, message: e.message || "An error occurred." };
+      } finally {
+        setActionLoading(false);
+      }
+    },
+    [requestLabPayoutBatch, fetchBatches, fetchUnbatchedPayments],
+  );
+
   useEffect(() => {
     fetchBatches();
-  }, [fetchBatches]);
+    fetchUnbatchedPayments();
+  }, [fetchBatches, fetchUnbatchedPayments]);
 
   // Filtering & Search
   const filteredData = useMemo(() => {
@@ -277,10 +314,12 @@ export const usePaymentBatch = () => {
             batch.status === 1
               ? "Initiated"
               : batch.status === 2
-                ? "Settled"
+                ? "Paid"
                 : batch.status === 3
-                  ? "Abandoned"
-                  : `Status ${batch.status}`;
+                  ? "Settled"
+                  : batch.status === 4
+                    ? "Abandoned"
+                    : `Status ${batch.status}`;
           if (!filters.status.includes(label)) return false;
         }
 
@@ -336,6 +375,10 @@ export const usePaymentBatch = () => {
     fetchBatchDetails,
     handleApproveBatch,
     handleRejectBatch,
+    unbatchedPayments,
+    loadingUnbatched,
+    fetchUnbatchedPayments,
+    handleRequestPayout,
   };
 };
 
