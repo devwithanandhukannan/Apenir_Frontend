@@ -272,6 +272,7 @@ export default function AdminDashboard() {
               color="primary"
               size="small"
               startIcon={<FileDownloadIcon />}
+              onClick={() => router.push("/reports-console")}
               sx={{
                 borderRadius: "8px",
                 textTransform: "none",
