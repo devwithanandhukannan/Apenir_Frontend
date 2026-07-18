@@ -17,6 +17,8 @@ import Divider from "@mui/material/Divider";
 import Switch from "@mui/material/Switch";
 import Tooltip from "@mui/material/Tooltip";
 import IconButton from "@mui/material/IconButton";
+import Tabs from "@mui/material/Tabs";
+import Tab from "@mui/material/Tab";
 import Checkbox from "@mui/material/Checkbox";
 import AddIcon from "@mui/icons-material/Add";
 import EditIcon from "@mui/icons-material/Edit";
@@ -25,6 +27,7 @@ import InventoryIcon from "@mui/icons-material/Inventory";
 import PaidIcon from "@mui/icons-material/Paid";
 import CommissionIcon from "@mui/icons-material/Percent";
 import MedicalServicesIcon from "@mui/icons-material/MedicalServices";
+import ScienceIcon from "@mui/icons-material/Science";
 import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
 
@@ -46,6 +49,7 @@ interface PackageItem {
   platformCommissionPct: number;
   isActive: boolean;
   createdByBranchId: string | null;
+  createdByBranchName?: string | null;
   serviceIds: string[];
   createdAt: string;
 }
@@ -155,7 +159,7 @@ const ServiceSelector: React.FC<{
                 size="small"
                 checked={selectedIds.includes(svc.id)}
                 onChange={() => onToggle(svc.id)}
-                onClick={(e) => e.stopPropagation()}
+                onClick={(e: React.MouseEvent) => e.stopPropagation()}
                 color="secondary"
                 sx={{ p: 0 }}
               />
@@ -204,6 +208,7 @@ export const PackagesConsole: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState(0); // 0 = Platform, 1 = Lab Custom
 
   const [addOpen, setAddOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
@@ -221,10 +226,7 @@ export const PackagesConsole: React.FC = () => {
     if (pkgRes.success && pkgRes.data?.data) setPackages(pkgRes.data.data);
     if (svcRes.success && svcRes.data?.data)
       setAllServices(
-        // Only master services (createdByBranchId == null) can be added to admin packages
-        svcRes.data.data.filter(
-          (s: ServicePublicDto) => s.isActive && !s.createdByBranchId,
-        ),
+        svcRes.data.data.filter((s: ServicePublicDto) => s.isActive),
       );
     setLoading(false);
   }, [get]);
@@ -242,16 +244,30 @@ export const PackagesConsole: React.FC = () => {
     return m;
   }, [allServices]);
 
+  const platformCount = useMemo(() => {
+    return packages.filter((p) => p.createdByBranchId === null).length;
+  }, [packages]);
+
+  const labCustomCount = useMemo(() => {
+    return packages.filter((p) => p.createdByBranchId !== null).length;
+  }, [packages]);
+
   // ── Filtered packages ────────────────────────────────────────────
   const filteredPackages = useMemo(() => {
     const q = searchQuery.toLowerCase();
-    return packages.filter(
-      (p) =>
+    const isLabTab = activeTab === 1;
+    return packages.filter((p) => {
+      const matchesTab = isLabTab
+        ? p.createdByBranchId !== null
+        : p.createdByBranchId === null;
+      if (!matchesTab) return false;
+      const matchesSearch =
         !q ||
         p.name.toLowerCase().includes(q) ||
-        p.description?.toLowerCase().includes(q),
-    );
-  }, [packages, searchQuery]);
+        p.description?.toLowerCase().includes(q);
+      return matchesSearch;
+    });
+  }, [packages, searchQuery, activeTab]);
 
   // ── Service toggle helper ────────────────────────────────────────
   const toggleService = (
@@ -390,26 +406,49 @@ export const PackagesConsole: React.FC = () => {
             customize.
           </Typography>
         </Box>
-        <Button
-          variant="contained"
-          color="secondary"
-          startIcon={<AddIcon />}
-          onClick={() => {
-            setForm({ ...EMPTY_FORM });
-            setAddOpen(true);
-          }}
-          sx={{
-            textTransform: "none",
-            fontWeight: 700,
-            borderRadius: "8px",
-            boxShadow: "none",
-            color: "#fff",
-            "&:hover": { boxShadow: "none" },
-          }}
-        >
-          Create Package
-        </Button>
+        {activeTab === 0 && (
+          <Button
+            variant="contained"
+            color="secondary"
+            startIcon={<AddIcon />}
+            onClick={() => {
+              setForm({ ...EMPTY_FORM });
+              setAddOpen(true);
+            }}
+            sx={{
+              textTransform: "none",
+              fontWeight: 700,
+              borderRadius: "8px",
+              boxShadow: "none",
+              color: "#fff",
+              "&:hover": { boxShadow: "none" },
+            }}
+          >
+            Create Package
+          </Button>
+        )}
       </Box>
+
+      {/* Tabs */}
+      <Tabs
+        value={activeTab}
+        onChange={(_, v) => {
+          setActiveTab(v);
+          setSearchQuery("");
+        }}
+        sx={{
+          mb: 3,
+          borderBottom: "1px solid var(--color-border)",
+          ".MuiTab-root": {
+            fontWeight: 700,
+            textTransform: "none",
+            fontSize: "14px",
+          },
+        }}
+      >
+        <Tab label={`Platform Packages (${platformCount})`} />
+        <Tab label={`Lab Custom Packages (${labCustomCount})`} />
+      </Tabs>
 
       {/* Search */}
       <TextField
@@ -502,6 +541,22 @@ export const PackagesConsole: React.FC = () => {
                     >
                       {pkg.name}
                     </Typography>
+                    {pkg.createdByBranchName && (
+                      <Box
+                        sx={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 0.5,
+                          color: "warning.main",
+                          mt: 0.5,
+                        }}
+                      >
+                        <ScienceIcon sx={{ fontSize: "14px" }} />
+                        <Typography variant="caption" sx={{ fontWeight: 700 }}>
+                          {pkg.createdByBranchName}
+                        </Typography>
+                      </Box>
+                    )}
                     {pkg.description && (
                       <Typography
                         variant="body2"
@@ -807,7 +862,7 @@ export const PackagesConsole: React.FC = () => {
                 Select Services
               </Typography>
               <ServiceSelector
-                allServices={allServices}
+                allServices={allServices.filter((s) => !s.createdByBranchId)}
                 selectedIds={form.serviceIds}
                 onToggle={(id) =>
                   toggleService(id, form.serviceIds, (ids) =>
@@ -974,7 +1029,11 @@ export const PackagesConsole: React.FC = () => {
               Included Services
             </Typography>
             <ServiceSelector
-              allServices={allServices}
+              allServices={allServices.filter(
+                (s) =>
+                  !s.createdByBranchId ||
+                  s.createdByBranchId === editTarget?.createdByBranchId,
+              )}
               selectedIds={editForm.serviceIds}
               onToggle={(id) =>
                 toggleService(id, editForm.serviceIds, (ids) =>

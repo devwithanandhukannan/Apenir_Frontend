@@ -34,6 +34,7 @@ import PaymentIcon from "@mui/icons-material/Payment";
 import EmailIcon from "@mui/icons-material/Email";
 import LockIcon from "@mui/icons-material/Lock";
 import InfoIcon from "@mui/icons-material/Info";
+import DeleteForeverIcon from "@mui/icons-material/DeleteForever";
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -91,6 +92,32 @@ export default function AdminSettingsPage() {
 
   const [isEmailTestOpen, setIsEmailTestOpen] = useState(false);
   const [emailTestAddress, setEmailTestAddress] = useState("");
+
+  const [isPurgeConfirmOpen, setIsPurgeConfirmOpen] = useState(false);
+  const [purgeConfirmText, setPurgeConfirmText] = useState("");
+  const [purging, setPurging] = useState(false);
+
+  const handlePurgeDatabase = async () => {
+    if (purgeConfirmText !== "RESET") {
+      toast.error("Please type RESET to confirm.");
+      return;
+    }
+    setPurging(true);
+    const response = await post<any, any>({
+      endpoint: "/api/admin/clear-database",
+      body: {},
+      requireAuth: true,
+    });
+    setPurging(false);
+    if (response.success) {
+      toast.success("Database reset successfully!");
+      setIsPurgeConfirmOpen(false);
+      setPurgeConfirmText("");
+      window.location.reload();
+    } else {
+      toast.error(response.data?.message || "Reset failed.");
+    }
+  };
 
   // Auth Guard
   useEffect(() => {
@@ -311,19 +338,25 @@ export default function AdminSettingsPage() {
                 <Tab
                   icon={<MessageIcon fontSize="small" />}
                   iconPosition="start"
-                  label="WhatsApp Gateway"
+                  label="WhatsApp"
                   sx={{ textTransform: "none", fontWeight: 700, py: 2 }}
                 />
                 <Tab
                   icon={<PaymentIcon fontSize="small" />}
                   iconPosition="start"
-                  label="Razorpay Payments"
+                  label="Razorpay"
                   sx={{ textTransform: "none", fontWeight: 700, py: 2 }}
                 />
                 <Tab
                   icon={<EmailIcon fontSize="small" />}
                   iconPosition="start"
-                  label="SMTP Email Service"
+                  label="SMTP Email"
+                  sx={{ textTransform: "none", fontWeight: 700, py: 2 }}
+                />
+                <Tab
+                  icon={<DeleteForeverIcon fontSize="small" />}
+                  iconPosition="start"
+                  label="Database Control"
                   sx={{ textTransform: "none", fontWeight: 700, py: 2 }}
                 />
               </Tabs>
@@ -628,6 +661,64 @@ export default function AdminSettingsPage() {
                 </Box>
               </CustomTabPanel>
 
+              {/* TAB 4: Database Control */}
+              <CustomTabPanel value={currentTab} index={3}>
+                <Box sx={{ mb: 3 }}>
+                  <Typography
+                    variant="subtitle1"
+                    sx={{
+                      fontWeight: 800,
+                      mb: 1,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 1,
+                      color: "#dc2626",
+                    }}
+                  >
+                    <DeleteForeverIcon />
+                    Danger Zone: Reset Database
+                  </Typography>
+                  <Typography variant="body2" color="text.secondary">
+                    Clear all diagnostic packages, lab profiles, patient
+                    details, bookings, and financial histories from the
+                    database. Default SuperAdmin credentials will be preserved.
+                  </Typography>
+                </Box>
+
+                <Box
+                  sx={{
+                    p: 3,
+                    border: "1px solid rgba(220,38,38,0.2)",
+                    borderRadius: "12px",
+                    bgcolor: "rgba(220,38,38,0.03)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: 2,
+                    alignItems: "flex-start",
+                  }}
+                >
+                  <Typography variant="body2" sx={{ fontWeight: 600 }}>
+                    This action is permanent and cannot be undone. All branches,
+                    services, booking logs, and payrolls will be purged
+                    instantly.
+                  </Typography>
+                  <Button
+                    variant="contained"
+                    onClick={() => setIsPurgeConfirmOpen(true)}
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      borderRadius: "8px",
+                      bgcolor: "#dc2626",
+                      color: "#fff",
+                      "&:hover": { bgcolor: "#b91c1c" },
+                    }}
+                  >
+                    Purge Database Records
+                  </Button>
+                </Box>
+              </CustomTabPanel>
+
               {/* Bottom Card Action Footer */}
               <Box
                 sx={{
@@ -654,31 +745,33 @@ export default function AdminSettingsPage() {
                   </Typography>
                 </Box>
 
-                <Button
-                  type="submit"
-                  variant="contained"
-                  color="secondary"
-                  disabled={saving}
-                  startIcon={
-                    saving ? (
-                      <CircularProgress size={20} color="inherit" />
-                    ) : (
-                      <SaveIcon />
-                    )
-                  }
-                  sx={{
-                    textTransform: "none",
-                    fontWeight: 700,
-                    borderRadius: "8px",
-                    px: 4,
-                    py: 1.2,
-                    color: "#fff",
-                    boxShadow: "none",
-                    "&:hover": { boxShadow: "none" },
-                  }}
-                >
-                  {saving ? "Saving configurations..." : "Save Settings"}
-                </Button>
+                {currentTab !== 3 && (
+                  <Button
+                    type="submit"
+                    variant="contained"
+                    color="secondary"
+                    disabled={saving}
+                    startIcon={
+                      saving ? (
+                        <CircularProgress size={20} color="inherit" />
+                      ) : (
+                        <SaveIcon />
+                      )
+                    }
+                    sx={{
+                      textTransform: "none",
+                      fontWeight: 700,
+                      borderRadius: "8px",
+                      px: 4,
+                      py: 1.2,
+                      color: "#fff",
+                      boxShadow: "none",
+                      "&:hover": { boxShadow: "none" },
+                    }}
+                  >
+                    {saving ? "Saving configurations..." : "Save Settings"}
+                  </Button>
+                )}
               </Box>
             </CardContent>
           </Card>
@@ -775,6 +868,70 @@ export default function AdminSettingsPage() {
               sx={{ textTransform: "none", fontWeight: 700, color: "#fff" }}
             >
               {testing ? "Sending..." : "Send Test Email"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+        {/* Purge Database Dialog */}
+        <Dialog
+          open={isPurgeConfirmOpen}
+          onClose={() => !purging && setIsPurgeConfirmOpen(false)}
+          maxWidth="xs"
+          fullWidth
+        >
+          <DialogTitle sx={{ fontWeight: 900, color: "#dc2626" }}>
+            Confirm Database Reset
+          </DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2} sx={{ py: 1 }}>
+              <Typography
+                variant="body2"
+                color="error"
+                sx={{ fontWeight: 700 }}
+              >
+                WARNING: This will delete ALL customer accounts, laboratory
+                branches, packages, appointments, and transaction logs.
+              </Typography>
+              <Typography variant="body2" color="text.secondary">
+                To proceed, type <strong>RESET</strong> in the field below to
+                confirm the action.
+              </Typography>
+              <TextField
+                label="Type RESET to confirm"
+                value={purgeConfirmText}
+                onChange={(e) => setPurgeConfirmText(e.target.value)}
+                placeholder="RESET"
+                fullWidth
+                size="small"
+                required
+                disabled={purging}
+              />
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ p: 2 }}>
+            <Button
+              onClick={() => {
+                setIsPurgeConfirmOpen(false);
+                setPurgeConfirmText("");
+              }}
+              color="inherit"
+              disabled={purging}
+              sx={{ textTransform: "none", fontWeight: 700 }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handlePurgeDatabase}
+              variant="contained"
+              disabled={purging || purgeConfirmText !== "RESET"}
+              sx={{
+                textTransform: "none",
+                fontWeight: 700,
+                bgcolor: "#dc2626",
+                color: "#fff",
+                "&:hover": { bgcolor: "#b91c1c" },
+              }}
+            >
+              {purging ? "Purging..." : "Purge All Data"}
             </Button>
           </DialogActions>
         </Dialog>
