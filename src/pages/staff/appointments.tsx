@@ -460,6 +460,29 @@ export default function StaffAppointmentsPage() {
       }
     }
 
+    // Validate quantities against booked items count
+    if (selected.bookedItems && selected.bookedItems.length > 0) {
+      for (const item of selected.bookedItems) {
+        const selectedCount = members.filter((m) => {
+          if (!m.testName) return false;
+          const selectedTests = m.testName
+            .split(",")
+            .map((x) => x.trim())
+            .filter(Boolean);
+          return selectedTests.includes(item.name);
+        }).length;
+
+        if (selectedCount > item.expectedCount) {
+          setSnackbar({
+            open: true,
+            message: `Only ${item.expectedCount} user${item.expectedCount > 1 ? "s" : ""} select ${item.name}.`,
+            severity: "error",
+          });
+          return;
+        }
+      }
+    }
+
     setMemberSaving(true);
     await addAppointmentMembers(selected.id, members, {
       onSuccess: () => {
@@ -961,13 +984,50 @@ export default function StaffAppointmentsPage() {
                         Collection Address
                       </Typography>
                       <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                        {selected.locationAddress}
+                        {selected.locationAddress.split(" | Tests:")[0]}
                       </Typography>
+                      {selected.bookedItems &&
+                        selected.bookedItems.length > 0 && (
+                          <Box sx={{ mt: 1.2 }}>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: "block",
+                                mb: 0.5,
+                                fontWeight: 700,
+                              }}
+                            >
+                              Booked Tests / Packages (Count)
+                            </Typography>
+                            <Box
+                              sx={{
+                                display: "flex",
+                                flexWrap: "wrap",
+                                gap: 0.8,
+                              }}
+                            >
+                              {selected.bookedItems.map((item) => (
+                                <Chip
+                                  key={item.itemId}
+                                  size="small"
+                                  label={`${item.name} (${item.expectedCount} ${item.expectedCount > 1 ? "persons" : "person"})`}
+                                  sx={{
+                                    fontWeight: 750,
+                                    fontSize: "11px",
+                                    bgcolor: "rgba(16,185,129,0.08)",
+                                    color: "success.main",
+                                  }}
+                                />
+                              ))}
+                            </Box>
+                          </Box>
+                        )}
                       {selected.landmark && (
                         <Typography
                           variant="caption"
                           color="text.secondary"
-                          sx={{ display: "block" }}
+                          sx={{ display: "block", mt: 0.5 }}
                         >
                           Landmark: {selected.landmark}
                         </Typography>

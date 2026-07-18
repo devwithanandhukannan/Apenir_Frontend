@@ -198,6 +198,7 @@ export const LabLogin: React.FC = () => {
           alignItems: "center",
           p: { xs: 3, sm: 6, md: 8 },
           bgcolor: "background.paper",
+          color: "text.primary",
           borderLeft: { md: "1px solid var(--color-border)" },
         }}
       >
@@ -314,6 +315,12 @@ export const LabLogin: React.FC = () => {
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "10px",
                 },
+                "& .MuiInputBase-input": {
+                  color: "text.primary",
+                },
+                "& .MuiInputLabel-root": {
+                  color: "text.secondary",
+                },
               }}
             />
             <TextField
@@ -352,6 +359,12 @@ export const LabLogin: React.FC = () => {
                 "& .MuiOutlinedInput-root": {
                   borderRadius: "10px",
                 },
+                "& .MuiInputBase-input": {
+                  color: "text.primary",
+                },
+                "& .MuiInputLabel-root": {
+                  color: "text.secondary",
+                },
               }}
             />
 
@@ -373,8 +386,11 @@ export const LabLogin: React.FC = () => {
                 sx={{
                   fontWeight: 600,
                   textDecoration: "none",
-                  color: "#00897b",
-                  "&:hover": { textDecoration: "underline", color: "#00695c" },
+                  color: isStaffLogin ? "#0284c7" : "#00897b",
+                  "&:hover": {
+                    textDecoration: "underline",
+                    color: isStaffLogin ? "#0369a1" : "#00695c",
+                  },
                 }}
               >
                 Forgot password?
@@ -394,12 +410,16 @@ export const LabLogin: React.FC = () => {
                 fontWeight: 700,
                 textTransform: "none",
                 fontSize: "15px",
-                backgroundColor: "#00897b",
-                boxShadow: "0 4px 14px rgba(0,137,123,0.35)",
+                backgroundColor: isStaffLogin ? "#0284c7" : "#00897b",
+                boxShadow: isStaffLogin
+                  ? "0 4px 14px rgba(2,132,199,0.35)"
+                  : "0 4px 14px rgba(0,137,123,0.35)",
                 transition: "all 0.25s ease",
                 "&:hover": {
-                  backgroundColor: "#00695c",
-                  boxShadow: "0 6px 20px rgba(0,137,123,0.45)",
+                  backgroundColor: isStaffLogin ? "#0369a1" : "#00695c",
+                  boxShadow: isStaffLogin
+                    ? "0 6px 20px rgba(2,132,199,0.45)"
+                    : "0 6px 20px rgba(0,137,123,0.45)",
                   transform: "translateY(-1px)",
                 },
                 "&:active": {
@@ -478,8 +498,10 @@ export const LabLogin: React.FC = () => {
                 textTransform: "none",
                 fontWeight: 700,
                 borderRadius: "10px",
-                backgroundColor: "#00897b",
-                "&:hover": { backgroundColor: "#00695c" },
+                backgroundColor: isStaffLogin ? "#0284c7" : "#00897b",
+                "&:hover": {
+                  backgroundColor: isStaffLogin ? "#0369a1" : "#00695c",
+                },
               }}
             >
               {resetSent ? "Sending..." : "Send Reset Link"}

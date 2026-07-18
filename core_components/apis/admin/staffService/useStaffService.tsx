@@ -32,6 +32,13 @@ export interface StaffListResponse {
   errors: string[];
 }
 
+export interface BookedItemItem {
+  itemId: string;
+  name: string;
+  type: string;
+  expectedCount: number;
+}
+
 // Staff appointment DTO from StaffController
 export interface StaffAppointmentItem {
   id: string;
@@ -48,6 +55,7 @@ export interface StaffAppointmentItem {
   memberCount: number;
   slotDate: string | null;
   slotStartTime: string | null;
+  bookedItems?: BookedItemItem[];
 }
 
 export interface StaffAppointmentsResponse {
