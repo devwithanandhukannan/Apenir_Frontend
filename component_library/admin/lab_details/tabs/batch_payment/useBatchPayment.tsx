@@ -306,6 +306,7 @@ export const useBatchPayment = (labId: string) => {
     unbatchedPayments,
     unbatchedLoading,
     selectedIds,
+    setSelectedIds,
     toggleSelectPayment,
     submitBatch,
     isSubmitting,

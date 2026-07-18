@@ -18,6 +18,12 @@ import ListItemIcon from "@mui/material/ListItemIcon";
 import ListItemText from "@mui/material/ListItemText";
 import Checkbox from "@mui/material/Checkbox";
 import CircularProgress from "@mui/material/CircularProgress";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
+import TextField from "@mui/material/TextField";
+import Stack from "@mui/material/Stack";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
 import PaymentsIcon from "@mui/icons-material/Payments";
 import CheckCircleIcon from "@mui/icons-material/CheckCircle";
 import CalendarMonthIcon from "@mui/icons-material/CalendarMonth";
@@ -38,6 +44,12 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
 }) => {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [isSuccessWarningOpen, setIsSuccessWarningOpen] = useState(false);
+
+  // Date and quick filter states for unbatched compilation modal
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
+  const [quickFilter, setQuickFilter] = useState("everything");
+
   const {
     paginatedData,
     loading,
@@ -50,6 +62,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
     unbatchedPayments,
     unbatchedLoading,
     selectedIds,
+    setSelectedIds,
     toggleSelectPayment,
     submitBatch,
     isSubmitting,
@@ -64,6 +77,126 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
     deleteBatch,
     selectAllPayments,
   } = useBatchPayment(labId);
+
+  // Quick preset dates setter
+  const setQuickFilterDates = (type: string) => {
+    const today = new Date();
+    const formatDate = (date: Date) => date.toISOString().split("T")[0];
+    setQuickFilter(type);
+
+    switch (type) {
+      case "yesterday":
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        setStartDateFilter(formatDate(yesterday));
+        setEndDateFilter(formatDate(yesterday));
+        break;
+      case "this_week": {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - distanceToMonday);
+        setStartDateFilter(formatDate(monday));
+        setEndDateFilter(formatDate(today));
+        break;
+      }
+      case "last_week": {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const lastMonday = new Date(today);
+        lastMonday.setDate(today.getDate() - distanceToMonday - 7);
+        const lastSunday = new Date(lastMonday);
+        lastSunday.setDate(lastMonday.getDate() + 6);
+        setStartDateFilter(formatDate(lastMonday));
+        setEndDateFilter(formatDate(lastSunday));
+        break;
+      }
+      case "this_month":
+        const firstDayMonth = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          1,
+        );
+        setStartDateFilter(formatDate(firstDayMonth));
+        setEndDateFilter(formatDate(today));
+        break;
+      case "last_month":
+        const startOfLastMonth = new Date(
+          today.getFullYear(),
+          today.getMonth() - 1,
+          1,
+        );
+        const endOfLastMonth = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          0,
+        );
+        setStartDateFilter(formatDate(startOfLastMonth));
+        setEndDateFilter(formatDate(endOfLastMonth));
+        break;
+      case "everything":
+      default:
+        setStartDateFilter("");
+        setEndDateFilter("");
+        break;
+    }
+  };
+
+  // Filtered unbatched payments matching criteria
+  const filteredUnbatched = useMemo(() => {
+    return unbatchedPayments.filter((p) => {
+      if (!p.paidAt) return true;
+      const paidDate = new Date(p.paidAt);
+
+      if (startDateFilter) {
+        const start = new Date(startDateFilter);
+        start.setHours(0, 0, 0, 0);
+        if (paidDate < start) return false;
+      }
+      if (endDateFilter) {
+        const end = new Date(endDateFilter);
+        end.setHours(23, 59, 59, 999);
+        if (paidDate > end) return false;
+      }
+      return true;
+    });
+  }, [unbatchedPayments, startDateFilter, endDateFilter]);
+
+  // Aggregate selected totals based on filtered items
+  const filteredSelectedTotal = useMemo(() => {
+    return unbatchedPayments
+      .filter(
+        (item) =>
+          selectedIds.includes(item.paymentId) &&
+          filteredUnbatched.some((f) => f.paymentId === item.paymentId),
+      )
+      .reduce((sum, item) => sum + (item.totalAmount || 0), 0);
+  }, [unbatchedPayments, selectedIds, filteredUnbatched]);
+
+  const filteredSelectedPayout = useMemo(() => {
+    return unbatchedPayments
+      .filter(
+        (item) =>
+          selectedIds.includes(item.paymentId) &&
+          filteredUnbatched.some((f) => f.paymentId === item.paymentId),
+      )
+      .reduce((sum, item) => sum + (item.labPayout || 0), 0);
+  }, [unbatchedPayments, selectedIds, filteredUnbatched]);
+
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredUnbatched.map((p) => p.paymentId);
+    const allFilteredSelected = filteredIds.every((id) =>
+      selectedIds.includes(id),
+    );
+    if (allFilteredSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !filteredIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => {
+        const union = new Set([...prev, ...filteredIds]);
+        return Array.from(union);
+      });
+    }
+  };
 
   // Define Columns configuration matching grid schema
   const columns: ColumnConfig<BatchPaymentItem>[] = useMemo(
@@ -204,13 +337,24 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
   );
 
   const handleSubmit = async () => {
-    const res = await submitBatch();
-    if (res.success) {
-      toast.success("Batch payout created successfully!");
-      setIsSuccessWarningOpen(true);
-    } else {
-      toast.error(res.message || "Failed to submit batch payout.");
+    const activeSelectedIds = selectedIds.filter((id) =>
+      filteredUnbatched.some((f) => f.paymentId === id),
+    );
+    if (activeSelectedIds.length === 0) {
+      toast.error("Please select at least one visible payout.");
+      return;
     }
+
+    setSelectedIds(activeSelectedIds);
+    setTimeout(async () => {
+      const res = await submitBatch();
+      if (res.success) {
+        toast.success("Batch payout created successfully!");
+        setIsSuccessWarningOpen(true);
+      } else {
+        toast.error(res.message || "Failed to submit batch payout.");
+      }
+    }, 0);
   };
 
   const handleDelete = async () => {
@@ -228,6 +372,10 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
       toast.error(res.message || "Failed to delete batch.");
     }
   };
+
+  const selectedFilteredCount = filteredUnbatched.filter((x) =>
+    selectedIds.includes(x.paymentId),
+  ).length;
 
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 4 }}>
@@ -423,7 +571,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
       >
         <DialogTitle sx={{ fontWeight: 800, pb: 1 }}>
           Create Payout Batch (
-          {unbatchedLoading ? "..." : unbatchedPayments.length})
+          {unbatchedLoading ? "..." : filteredUnbatched.length})
         </DialogTitle>
         <DialogContent
           dividers
@@ -464,6 +612,55 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
             </Box>
           ) : (
             <>
+              {/* Date & Quick Filters */}
+              <Stack spacing={1.5} sx={{ mb: 2 }}>
+                <FormControl size="small" fullWidth>
+                  <InputLabel id="quick-filter-select-label">
+                    Quick Date Filter
+                  </InputLabel>
+                  <Select
+                    labelId="quick-filter-select-label"
+                    value={quickFilter}
+                    label="Quick Date Filter"
+                    onChange={(e) => setQuickFilterDates(e.target.value)}
+                  >
+                    <MenuItem value="everything">Everything</MenuItem>
+                    <MenuItem value="yesterday">Yesterday</MenuItem>
+                    <MenuItem value="this_week">This Week</MenuItem>
+                    <MenuItem value="last_week">Last Week</MenuItem>
+                    <MenuItem value="this_month">This Month</MenuItem>
+                    <MenuItem value="last_month">Last Month</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <Stack direction="row" spacing={1.5}>
+                  <TextField
+                    label="Start Date"
+                    type="date"
+                    size="small"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    fullWidth
+                    value={startDateFilter}
+                    onChange={(e) => {
+                      setStartDateFilter(e.target.value);
+                      setQuickFilter("custom");
+                    }}
+                  />
+                  <TextField
+                    label="End Date"
+                    type="date"
+                    size="small"
+                    slotProps={{ inputLabel: { shrink: true } }}
+                    fullWidth
+                    value={endDateFilter}
+                    onChange={(e) => {
+                      setEndDateFilter(e.target.value);
+                      setQuickFilter("custom");
+                    }}
+                  />
+                </Stack>
+              </Stack>
+
               <Box
                 sx={{
                   display: "flex",
@@ -479,27 +676,33 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
                 <Checkbox
                   edge="start"
                   checked={
-                    selectedIds.length === unbatchedPayments.length &&
-                    unbatchedPayments.length > 0
+                    filteredUnbatched.length > 0 &&
+                    filteredUnbatched.every((x) =>
+                      selectedIds.includes(x.paymentId),
+                    )
                   }
                   indeterminate={
-                    selectedIds.length > 0 &&
-                    selectedIds.length < unbatchedPayments.length
+                    filteredUnbatched.some((x) =>
+                      selectedIds.includes(x.paymentId),
+                    ) &&
+                    !filteredUnbatched.every((x) =>
+                      selectedIds.includes(x.paymentId),
+                    )
                   }
-                  onChange={selectAllPayments}
+                  onChange={handleSelectAllFiltered}
                   slotProps={{ input: { "aria-label": "select all payments" } }}
                 />
                 <Typography
                   variant="body2"
                   sx={{ fontWeight: 800, ml: 1, color: "#475569" }}
                 >
-                  Select All ({unbatchedPayments.length} items)
+                  Select All ({filteredUnbatched.length} items)
                 </Typography>
               </Box>
               <List
                 sx={{ width: "100%", maxHeight: "300px", overflowY: "auto" }}
               >
-                {unbatchedPayments.map((item) => {
+                {filteredUnbatched.map((item) => {
                   const labelId = `checkbox-list-label-${item.paymentId}`;
                   const isChecked = selectedIds.includes(item.paymentId);
                   return (
@@ -587,7 +790,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
                 })}
               </List>
 
-              {selectedIds.length > 0 && (
+              {selectedFilteredCount > 0 && (
                 <Box
                   sx={{
                     p: 2,
@@ -605,14 +808,14 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
                     color="text.secondary"
                     sx={{ fontWeight: 600 }}
                   >
-                    Selected ({selectedIds.length} items):
+                    Selected ({selectedFilteredCount} items):
                   </Typography>
                   <Box sx={{ textAlign: "right" }}>
                     <Typography
                       variant="subtitle2"
                       sx={{ fontWeight: 800, color: "primary.main" }}
                     >
-                      Total Amount: ₹{selectedTotal.toLocaleString()}
+                      Total Amount: ₹{filteredSelectedTotal.toLocaleString()}
                     </Typography>
                     <Typography
                       variant="caption"
@@ -622,7 +825,7 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
                         display: "block",
                       }}
                     >
-                      Net Payout: ₹{selectedPayout.toLocaleString()}
+                      Net Payout: ₹{filteredSelectedPayout.toLocaleString()}
                     </Typography>
                   </Box>
                 </Box>
@@ -643,12 +846,12 @@ export const LabBatchPaymentTab: React.FC<LabBatchPaymentTabProps> = ({
           <Button
             onClick={handleSubmit}
             variant="contained"
-            disabled={isSubmitting || selectedIds.length === 0}
+            disabled={isSubmitting || selectedFilteredCount === 0}
             sx={{ fontWeight: 700, textTransform: "none", borderRadius: "8px" }}
           >
             {isSubmitting
               ? "Submitting..."
-              : `Submit Batch (${selectedIds.length})`}
+              : `Submit Batch (${selectedFilteredCount})`}
           </Button>
         </DialogActions>
       </Dialog>

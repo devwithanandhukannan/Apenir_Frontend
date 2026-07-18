@@ -527,6 +527,35 @@ export function useLabService() {
     [get],
   );
 
+  // API Caller to load all payouts for reporting
+  const getAllPayouts = useCallback(
+    async (
+      params?: { startDate?: string; endDate?: string; branchId?: string },
+      options?: Omit<BaseRequestOptions<any>, "endpoint" | "requireAuth">,
+    ) => {
+      const response = await get<any>({
+        endpoint: "/api/admin/batch-payments/all-payouts",
+        requireAuth: true,
+        signal: options?.signal,
+        onSuccess: (data) => {
+          if (options?.onSuccess) {
+            options.onSuccess(data);
+          }
+        },
+        onError: (err) => {
+          if (options?.onError) {
+            options.onError(err);
+          }
+        },
+        headers: options?.headers,
+        params: { ...options?.params, ...params },
+      });
+
+      return response;
+    },
+    [get],
+  );
+
   // API Caller to create a batch payout
   const createBatchPayment = useCallback(
     async (
@@ -1190,6 +1219,7 @@ export function useLabService() {
     getLabStaff,
     getLabAppointments,
     getUnbatchedPayments,
+    getAllPayouts,
     createBatchPayment,
     listBatchPayments,
     getBatchDetails,

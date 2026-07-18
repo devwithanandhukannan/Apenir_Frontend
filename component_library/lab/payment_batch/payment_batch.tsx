@@ -23,6 +23,10 @@ import CancelIcon from "@mui/icons-material/Cancel";
 import Checkbox from "@mui/material/Checkbox";
 import TextField from "@mui/material/TextField";
 import Stack from "@mui/material/Stack";
+import FormControl from "@mui/material/FormControl";
+import InputLabel from "@mui/material/InputLabel";
+import Select from "@mui/material/Select";
+import MenuItem from "@mui/material/MenuItem";
 import toast from "react-hot-toast";
 import ResponsiveGrid from "@/shared_features/responsive_grid";
 import { usePaymentBatch, LabPaymentBatchItem } from "./usePaymentBatch";
@@ -81,6 +85,110 @@ export const PaymentBatch: React.FC = () => {
   const [isRequestDialogOpen, setIsRequestDialogOpen] = useState(false);
   const [selectedPaymentIds, setSelectedPaymentIds] = useState<string[]>([]);
   const [requestNotes, setRequestNotes] = useState("");
+
+  const [startDateFilter, setStartDateFilter] = useState("");
+  const [endDateFilter, setEndDateFilter] = useState("");
+  const [quickFilter, setQuickFilter] = useState("everything");
+
+  // Quick preset dates setter
+  const setQuickFilterDates = (type: string) => {
+    const today = new Date();
+    const formatDate = (date: Date) => date.toISOString().split("T")[0];
+    setQuickFilter(type);
+
+    switch (type) {
+      case "yesterday":
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        setStartDateFilter(formatDate(yesterday));
+        setEndDateFilter(formatDate(yesterday));
+        break;
+      case "this_week": {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const monday = new Date(today);
+        monday.setDate(today.getDate() - distanceToMonday);
+        setStartDateFilter(formatDate(monday));
+        setEndDateFilter(formatDate(today));
+        break;
+      }
+      case "last_week": {
+        const currentDay = today.getDay();
+        const distanceToMonday = currentDay === 0 ? 6 : currentDay - 1;
+        const lastMonday = new Date(today);
+        lastMonday.setDate(today.getDate() - distanceToMonday - 7);
+        const lastSunday = new Date(lastMonday);
+        lastSunday.setDate(lastMonday.getDate() + 6);
+        setStartDateFilter(formatDate(lastMonday));
+        setEndDateFilter(formatDate(lastSunday));
+        break;
+      }
+      case "this_month":
+        const firstDayMonth = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          1,
+        );
+        setStartDateFilter(formatDate(firstDayMonth));
+        setEndDateFilter(formatDate(today));
+        break;
+      case "last_month":
+        const startOfLastMonth = new Date(
+          today.getFullYear(),
+          today.getMonth() - 1,
+          1,
+        );
+        const endOfLastMonth = new Date(
+          today.getFullYear(),
+          today.getMonth(),
+          0,
+        );
+        setStartDateFilter(formatDate(startOfLastMonth));
+        setEndDateFilter(formatDate(endOfLastMonth));
+        break;
+      case "everything":
+      default:
+        setStartDateFilter("");
+        setEndDateFilter("");
+        break;
+    }
+  };
+
+  const filteredUnbatched = useMemo(() => {
+    return unbatchedPayments.filter((p) => {
+      if (!p.paidAt) return true;
+      const paidDate = new Date(p.paidAt);
+
+      if (startDateFilter) {
+        const start = new Date(startDateFilter);
+        start.setHours(0, 0, 0, 0);
+        if (paidDate < start) return false;
+      }
+      if (endDateFilter) {
+        const end = new Date(endDateFilter);
+        end.setHours(23, 59, 59, 999);
+        if (paidDate > end) return false;
+      }
+      return true;
+    });
+  }, [unbatchedPayments, startDateFilter, endDateFilter]);
+
+  const handleSelectAllFiltered = () => {
+    const filteredIds = filteredUnbatched.map((p) => p.paymentId);
+    const allFilteredSelected = filteredIds.every((id) =>
+      selectedPaymentIds.includes(id),
+    );
+    if (allFilteredSelected) {
+      setSelectedPaymentIds((prev) =>
+        prev.filter((id) => !filteredIds.includes(id)),
+      );
+    } else {
+      setSelectedPaymentIds((prev) => {
+        const union = new Set([...prev, ...filteredIds]);
+        return Array.from(union);
+      });
+    }
+  };
 
   const getStatusLabel = (status: number) => {
     if (status === 1) return "Initiated";
@@ -259,6 +367,10 @@ export const PaymentBatch: React.FC = () => {
       toast.error(res.message);
     }
   };
+
+  const selectedFilteredCount = filteredUnbatched.filter((x) =>
+    selectedPaymentIds.includes(x.paymentId),
+  ).length;
 
   return (
     <Box sx={{ p: { xs: 2, md: 4 } }}>
@@ -671,11 +783,62 @@ export const PaymentBatch: React.FC = () => {
             manually, and mark it as Paid.
           </Typography>
 
+          {/* Date & Quick Filters */}
+          <Stack spacing={1.5} sx={{ mb: 1 }}>
+            <FormControl size="small" fullWidth>
+              <InputLabel id="lab-quick-filter-label">
+                Quick Date Filter
+              </InputLabel>
+              <Select
+                labelId="lab-quick-filter-label"
+                value={quickFilter}
+                label="Quick Date Filter"
+                onChange={(e: any) =>
+                  setQuickFilterDates(e.target.value as string)
+                }
+              >
+                <MenuItem value="everything">Everything</MenuItem>
+                <MenuItem value="yesterday">Yesterday</MenuItem>
+                <MenuItem value="this_week">This Week</MenuItem>
+                <MenuItem value="last_week">Last Week</MenuItem>
+                <MenuItem value="this_month">This Month</MenuItem>
+                <MenuItem value="last_month">Last Month</MenuItem>
+              </Select>
+            </FormControl>
+
+            <Stack direction="row" spacing={1.5}>
+              <TextField
+                label="Start Date"
+                type="date"
+                size="small"
+                slotProps={{ inputLabel: { shrink: true } }}
+                fullWidth
+                value={startDateFilter}
+                onChange={(e) => {
+                  setStartDateFilter(e.target.value);
+                  setQuickFilter("custom");
+                }}
+              />
+              <TextField
+                label="End Date"
+                type="date"
+                size="small"
+                slotProps={{ inputLabel: { shrink: true } }}
+                fullWidth
+                value={endDateFilter}
+                onChange={(e) => {
+                  setEndDateFilter(e.target.value);
+                  setQuickFilter("custom");
+                }}
+              />
+            </Stack>
+          </Stack>
+
           {loadingUnbatched ? (
             <Box sx={{ display: "flex", justifyContent: "center", py: 4 }}>
               <CircularProgress color="secondary" />
             </Box>
-          ) : unbatchedPayments.length > 0 ? (
+          ) : filteredUnbatched.length > 0 ? (
             <TableContainer
               component={Paper}
               elevation={0}
@@ -692,21 +855,15 @@ export const PaymentBatch: React.FC = () => {
                       <Checkbox
                         indeterminate={
                           selectedPaymentIds.length > 0 &&
-                          selectedPaymentIds.length < unbatchedPayments.length
+                          selectedPaymentIds.length < filteredUnbatched.length
                         }
                         checked={
-                          unbatchedPayments.length > 0 &&
-                          selectedPaymentIds.length === unbatchedPayments.length
+                          filteredUnbatched.length > 0 &&
+                          filteredUnbatched.every((p) =>
+                            selectedPaymentIds.includes(p.paymentId),
+                          )
                         }
-                        onChange={(e) => {
-                          if (e.target.checked) {
-                            setSelectedPaymentIds(
-                              unbatchedPayments.map((p) => p.paymentId),
-                            );
-                          } else {
-                            setSelectedPaymentIds([]);
-                          }
-                        }}
+                        onChange={handleSelectAllFiltered}
                       />
                     </TableCell>
                     <TableCell sx={{ fontWeight: 800, bgcolor: "#f8fafc" }}>
@@ -736,7 +893,7 @@ export const PaymentBatch: React.FC = () => {
                   </TableRow>
                 </TableHead>
                 <TableBody>
-                  {unbatchedPayments.map((p) => (
+                  {filteredUnbatched.map((p) => (
                     <TableRow key={p.paymentId} hover>
                       <TableCell padding="checkbox">
                         <Checkbox
@@ -779,12 +936,13 @@ export const PaymentBatch: React.FC = () => {
               }}
             >
               <Typography variant="body2" color="text.secondary">
-                No unpaid completed bookings available for payout request.
+                No completed bookings available matching search/filter
+                constraints.
               </Typography>
             </Box>
           )}
 
-          {selectedPaymentIds.length > 0 && (
+          {selectedFilteredCount > 0 && (
             <Box
               sx={{
                 bgcolor: "#f8fafc",
@@ -798,7 +956,7 @@ export const PaymentBatch: React.FC = () => {
                   Selected Bookings:
                 </Typography>
                 <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>
-                  {selectedPaymentIds.length}
+                  {selectedFilteredCount}
                 </Typography>
               </Stack>
               <Stack
@@ -813,7 +971,7 @@ export const PaymentBatch: React.FC = () => {
                   sx={{ fontWeight: 800, color: "#00897b" }}
                 >
                   ₹
-                  {unbatchedPayments
+                  {filteredUnbatched
                     .filter((p) => selectedPaymentIds.includes(p.paymentId))
                     .reduce((acc, p) => acc + p.labPayout, 0)
                     .toFixed(2)}
@@ -844,10 +1002,17 @@ export const PaymentBatch: React.FC = () => {
           <Button
             variant="contained"
             color="secondary"
-            disabled={actionLoading || selectedPaymentIds.length === 0}
+            disabled={actionLoading || selectedFilteredCount === 0}
             onClick={async () => {
+              const activeSelectedIds = selectedPaymentIds.filter((id) =>
+                filteredUnbatched.some((f) => f.paymentId === id),
+              );
+              if (activeSelectedIds.length === 0) {
+                toast.error("Please select at least one visible payout.");
+                return;
+              }
               const res = await handleRequestPayout(
-                selectedPaymentIds,
+                activeSelectedIds,
                 requestNotes,
               );
               if (res.success) {
