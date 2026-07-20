@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import axios from "axios";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Avatar from "@mui/material/Avatar";
@@ -16,10 +17,14 @@ import {
 } from "@/core_components/apis/admin/labService";
 import { useRouter } from "next/router";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
+
+const LAB_CONSOLE_KEYS = ["FETCH_LABS_REQUEST", "CHECK_EMAIL_REQUEST"] as const;
 
 export const useLabConsole = () => {
   const router = useRouter();
   const { getLabs, inviteLab } = useLabService();
+  const { controllers } = useAbortController(LAB_CONSOLE_KEYS);
 
   // Lab invitation state controls
   const [isInviteDialogOpen, setIsInviteDialogOpen] = useState(false);
@@ -37,12 +42,28 @@ export const useLabConsole = () => {
       return;
     }
 
+    const controller = controllers.CHECK_EMAIL_REQUEST;
+    controller.reset();
+    const signal = controller.signal;
+
     const delayDebounceFn = setTimeout(async () => {
       setCheckingEmail(true);
       const res = await get<any>({
         endpoint: `/api/auth/check-email?email=${encodeURIComponent(inviteEmail.trim())}`,
         requireAuth: true,
+        signal: signal,
       });
+
+      if (
+        signal.aborted ||
+        (res.error &&
+          (res.error.name === "CanceledError" ||
+            res.error.message === "canceled" ||
+            axios.isCancel(res.error)))
+      ) {
+        return;
+      }
+
       setCheckingEmail(false);
 
       if (res.success && res.data?.success && res.data?.data) {
@@ -54,8 +75,11 @@ export const useLabConsole = () => {
       }
     }, 500);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [inviteEmail, get]);
+    return () => {
+      clearTimeout(delayDebounceFn);
+      controller.abort();
+    };
+  }, [inviteEmail, get, controllers]);
 
   // Maintain grid UI filter state
   const [filters, setFilters] = useState<GridFilters>({
@@ -74,12 +98,35 @@ export const useLabConsole = () => {
   // Fetch labs from live API
   const fetchLabs = useCallback(async () => {
     setLoading(true);
-    const response = await getLabs();
-    if (response.success && response.data?.data) {
-      setLabs(response.data.data);
+    controllers.FETCH_LABS_REQUEST.reset();
+    const signal = controllers.FETCH_LABS_REQUEST.signal;
+    try {
+      const response = await getLabs({ signal });
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
+      if (response.success && response.data?.data) {
+        setLabs(response.data.data);
+      }
+      setLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
+      setLoading(false);
     }
-    setLoading(false);
-  }, [getLabs]);
+  }, [getLabs, controllers]);
 
   useEffect(() => {
     fetchLabs();

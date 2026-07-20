@@ -1,8 +1,10 @@
 import React, { useEffect, useState, useCallback, useMemo } from "react";
 import Head from "next/head";
 import { useRouter } from "next/router";
+import axios from "axios";
 import { useAppSelector } from "@/core_components/store/hooks";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Grid from "@mui/material/Grid";
@@ -28,12 +30,18 @@ import ListAltIcon from "@mui/icons-material/ListAlt";
 import FileDownloadIcon from "@mui/icons-material/FileDownload";
 import toast, { Toaster } from "react-hot-toast";
 
+const REPORTS_KEYS = [
+  "FETCH_ALL_PAYOUTS_REQUEST",
+  "FETCH_LABS_REQUEST",
+] as const;
+
 export default function ReportsConsolePage() {
   const { user, isAuthenticated, isInitialized } = useAppSelector(
     (state) => state.auth,
   );
   const router = useRouter();
   const { get, post } = useApi();
+  const { controllers } = useAbortController(REPORTS_KEYS);
 
   // Labs list
   const [labs, setLabs] = useState<any[]>([]);
@@ -60,39 +68,93 @@ export default function ReportsConsolePage() {
   // Load labs list on mount
   useEffect(() => {
     const fetchLabs = async () => {
-      const response = await post<any, any>({
-        endpoint: "/api/admin/labs",
-        body: {},
-        requireAuth: true,
-      });
-      if (response.success && response.data?.success && response.data?.data) {
-        setLabs(response.data.data);
+      controllers.FETCH_LABS_REQUEST.reset();
+      const signal = controllers.FETCH_LABS_REQUEST.signal;
+
+      try {
+        const response = await post<any, any>({
+          endpoint: "/api/admin/labs",
+          body: {},
+          requireAuth: true,
+          signal,
+        });
+
+        if (
+          signal.aborted ||
+          (response.error &&
+            (response.error.name === "CanceledError" ||
+              response.error.message === "canceled" ||
+              axios.isCancel(response.error)))
+        ) {
+          return;
+        }
+
+        if (response.success && response.data?.success && response.data?.data) {
+          setLabs(response.data.data);
+        }
+      } catch (error: any) {
+        if (
+          signal.aborted ||
+          error?.name === "CanceledError" ||
+          error?.message === "canceled" ||
+          axios.isCancel(error)
+        ) {
+          return;
+        }
       }
     };
     if (isAuthenticated && user?.role === "admin") {
       fetchLabs();
     }
-  }, [post, isAuthenticated, user]);
+  }, [post, isAuthenticated, user, controllers]);
 
   const fetchAllPayouts = useCallback(async () => {
     setLoadingAllPayouts(true);
+    controllers.FETCH_ALL_PAYOUTS_REQUEST.reset();
+    const signal = controllers.FETCH_ALL_PAYOUTS_REQUEST.signal;
+
     const queryParams = new URLSearchParams();
     if (payoutListStart) queryParams.append("startDate", payoutListStart);
     if (payoutListEnd) queryParams.append("endDate", payoutListEnd);
     if (payoutListBranch && payoutListBranch !== "all")
       queryParams.append("branchId", payoutListBranch);
 
-    const response = await get<any>({
-      endpoint: `/api/admin/batch-payments/all-payouts?${queryParams.toString()}`,
-      requireAuth: true,
-    });
-    setLoadingAllPayouts(false);
-    if (response.success && response.data?.success && response.data?.data) {
-      setAllPayouts(response.data.data);
-    } else {
+    try {
+      const response = await get<any>({
+        endpoint: `/api/admin/batch-payments/all-payouts?${queryParams.toString()}`,
+        requireAuth: true,
+        signal,
+      });
+
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
+
+      if (response.success && response.data?.success && response.data?.data) {
+        setAllPayouts(response.data.data);
+      } else {
+        setAllPayouts([]);
+      }
+      setLoadingAllPayouts(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
       setAllPayouts([]);
+      setLoadingAllPayouts(false);
     }
-  }, [get, payoutListStart, payoutListEnd, payoutListBranch]);
+  }, [get, payoutListStart, payoutListEnd, payoutListBranch, controllers]);
 
   useEffect(() => {
     if (isAuthenticated && user?.role === "admin") {

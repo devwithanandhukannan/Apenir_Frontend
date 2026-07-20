@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import axios from "axios";
 import {
   GridFilters,
   PaginationProps,
@@ -7,9 +8,13 @@ import {
   useLabService,
   AppointmentItem,
 } from "@/core_components/apis/admin/labService";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
+
+const APPOINTMENTS_KEYS = ["FETCH_APPOINTMENTS_REQUEST"] as const;
 
 export const useAppointments = (labId: string) => {
   const { getLabAppointments } = useLabService();
+  const { controllers } = useAbortController(APPOINTMENTS_KEYS);
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<AppointmentItem[]>([]);
 
@@ -26,44 +31,74 @@ export const useAppointments = (labId: string) => {
   const fetchAppointments = useCallback(async () => {
     if (!labId) return;
     setLoading(true);
-    const response = await getLabAppointments(labId, {
-      pageNumber: 1,
-      rowsPerPage: 100,
-    });
+    controllers.FETCH_APPOINTMENTS_REQUEST.reset();
+    const signal = controllers.FETCH_APPOINTMENTS_REQUEST.signal;
 
-    if (response.success && response.data?.data?.items) {
-      const apiAppointments = response.data.data.items;
-
-      // Map C# entity structures to standard frontend interfaces
-      const mappedAppointments: AppointmentItem[] = apiAppointments.map(
-        (app: any) => {
-          let mappedStatus: "Scheduled" | "Completed" | "Cancelled" =
-            "Scheduled";
-          // Map C# AppointmentStatus enums (4 = Completed, 5 = Cancelled)
-          if (app.status === 4 || app.status === "Completed") {
-            mappedStatus = "Completed";
-          } else if (app.status === 5 || app.status === "Cancelled") {
-            mappedStatus = "Cancelled";
-          }
-
-          return {
-            id: app.id,
-            appointmentNumber: app.appointmentNumber,
-            customerName: app.customerUser?.name || "Customer",
-            scheduledTime: app.appointmentSlot?.slotDate || app.createdAt,
-            tests: "Comprehensive Diagnostics Profile",
-            amount: Number(app.totalAmount || 0),
-            status: mappedStatus,
-          };
+    try {
+      const response = await getLabAppointments(
+        labId,
+        {
+          pageNumber: 1,
+          rowsPerPage: 100,
         },
+        { signal },
       );
 
-      setAppointments(mappedAppointments);
-    } else {
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
+
+      if (response.success && response.data?.data?.items) {
+        const apiAppointments = response.data.data.items;
+
+        // Map C# entity structures to standard frontend interfaces
+        const mappedAppointments: AppointmentItem[] = apiAppointments.map(
+          (app: any) => {
+            let mappedStatus: "Scheduled" | "Completed" | "Cancelled" =
+              "Scheduled";
+            // Map C# AppointmentStatus enums (4 = Completed, 5 = Cancelled)
+            if (app.status === 4 || app.status === "Completed") {
+              mappedStatus = "Completed";
+            } else if (app.status === 5 || app.status === "Cancelled") {
+              mappedStatus = "Cancelled";
+            }
+
+            return {
+              id: app.id,
+              appointmentNumber: app.appointmentNumber,
+              customerName: app.customerUser?.name || "Customer",
+              scheduledTime: app.appointmentSlot?.slotDate || app.createdAt,
+              tests: "Comprehensive Diagnostics Profile",
+              amount: Number(app.totalAmount || 0),
+              status: mappedStatus,
+            };
+          },
+        );
+
+        setAppointments(mappedAppointments);
+      } else {
+        setAppointments([]);
+      }
+      setLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
       setAppointments([]);
+      setLoading(false);
     }
-    setLoading(false);
-  }, [labId, getLabAppointments]);
+  }, [labId, getLabAppointments, controllers]);
 
   useEffect(() => {
     fetchAppointments();

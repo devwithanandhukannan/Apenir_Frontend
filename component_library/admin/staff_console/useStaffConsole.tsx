@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import axios from "axios";
 import Typography from "@mui/material/Typography";
 import Box from "@mui/material/Box";
 import Avatar from "@mui/material/Avatar";
@@ -18,6 +19,7 @@ import {
   useLabService,
   LabItem,
 } from "@/core_components/apis/admin/labService";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
 
 // Map numeric role values to readable labels
 const ROLE_LABELS: Record<number, string> = {
@@ -26,7 +28,14 @@ const ROLE_LABELS: Record<number, string> = {
   2: "Lab User",
 };
 
+const STAFF_CONSOLE_KEYS = [
+  "FETCH_STAFF_REQUEST",
+  "FETCH_LABS_REQUEST",
+] as const;
+
 export const useStaffConsole = () => {
+  const { controllers } = useAbortController(STAFF_CONSOLE_KEYS);
+
   // Maintain grid UI filter state
   const [filters, setFilters] = useState<GridFilters>({
     search: "",
@@ -52,12 +61,37 @@ export const useStaffConsole = () => {
   // Fetch staff from live API
   const fetchStaff = useCallback(async () => {
     setLoading(true);
-    const response = await getStaff();
-    if (response.success && response.data?.data) {
-      setStaff(response.data.data);
+    controllers.FETCH_STAFF_REQUEST.reset();
+    const signal = controllers.FETCH_STAFF_REQUEST.signal;
+
+    try {
+      const response = await getStaff({ signal });
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
+
+      if (response.success && response.data?.data) {
+        setStaff(response.data.data);
+      }
+      setLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
+      setLoading(false);
     }
-    setLoading(false);
-  }, [getStaff]);
+  }, [getStaff, controllers]);
 
   useEffect(() => {
     fetchStaff();
@@ -162,17 +196,42 @@ export const useStaffConsole = () => {
 
       if (row.labId) {
         setLabLoading(true);
-        const response = await getLabs();
-        if (response.success && response.data?.data) {
-          const foundLab = response.data.data.find(
-            (l) => l.id === row.labId || l.labUserId === row.labId,
-          );
-          setSelectedLab(foundLab || null);
+        controllers.FETCH_LABS_REQUEST.reset();
+        const signal = controllers.FETCH_LABS_REQUEST.signal;
+
+        try {
+          const response = await getLabs({ signal });
+          if (
+            signal.aborted ||
+            (response.error &&
+              (response.error.name === "CanceledError" ||
+                response.error.message === "canceled" ||
+                axios.isCancel(response.error)))
+          ) {
+            return;
+          }
+
+          if (response.success && response.data?.data) {
+            const foundLab = response.data.data.find(
+              (l) => l.id === row.labId || l.labUserId === row.labId,
+            );
+            setSelectedLab(foundLab || null);
+          }
+          setLabLoading(false);
+        } catch (error: any) {
+          if (
+            signal.aborted ||
+            error?.name === "CanceledError" ||
+            error?.message === "canceled" ||
+            axios.isCancel(error)
+          ) {
+            return;
+          }
+          setLabLoading(false);
         }
-        setLabLoading(false);
       }
     },
-    [getLabs],
+    [getLabs, controllers],
   );
 
   const handleCloseDialog = useCallback(() => {

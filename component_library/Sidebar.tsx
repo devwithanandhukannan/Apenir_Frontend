@@ -137,6 +137,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       path: "/analytics-console",
       icon: <BarChartIcon fontSize="small" />,
     },
+    {
+      text: "Support & Docs",
+      path: "/admin/support",
+      icon: <HelpIcon fontSize="small" />,
+    },
   ];
 
   // Define lab navigation list
@@ -180,6 +185,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
       text: "Insights",
       path: "/lab/insights",
       icon: <InsightsIcon fontSize="small" />,
+    },
+    {
+      text: "Support & Docs",
+      path: "/lab/support",
+      icon: <HelpIcon fontSize="small" />,
     },
   ];
 
@@ -606,7 +616,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
         </Box>
       </div>
 
-      {/* Sticky Bottom Segment (Settings, Support, and Collapse Toggle) */}
+      {/* Sticky Bottom Segment (Settings and Collapse Toggle) */}
       <Box
         sx={{
           p: isCollapsed ? 1 : 2,
@@ -659,54 +669,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 primary={
                   <Typography variant="body2" sx={{ fontWeight: 500 }}>
                     Settings
-                  </Typography>
-                }
-              />
-            </ListItemButton>
-          )}
-
-          {isCollapsed ? (
-            <Tooltip title="Support" placement="right">
-              <Box>
-                <ListItemButton
-                  onClick={() => alert("MOCK: Support Panel")}
-                  sx={{
-                    borderRadius: "8px",
-                    py: 0.8,
-                    px: 0,
-                    justifyContent: "center",
-                    color: "text.secondary",
-                  }}
-                >
-                  <ListItemIcon
-                    sx={{
-                      minWidth: 0,
-                      justifyContent: "center",
-                      color: "text.secondary",
-                    }}
-                  >
-                    <HelpIcon fontSize="small" />
-                  </ListItemIcon>
-                </ListItemButton>
-              </Box>
-            </Tooltip>
-          ) : (
-            <ListItemButton
-              onClick={() => alert("MOCK: Support Panel")}
-              sx={{
-                borderRadius: "8px",
-                py: 0.8,
-                px: 2,
-                color: "text.secondary",
-              }}
-            >
-              <ListItemIcon sx={{ minWidth: 32, color: "text.secondary" }}>
-                <HelpIcon fontSize="small" />
-              </ListItemIcon>
-              <ListItemText
-                primary={
-                  <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                    Support
                   </Typography>
                 }
               />
