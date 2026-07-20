@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import axios from "axios";
 import {
   GridFilters,
   PaginationProps,
@@ -8,6 +9,7 @@ import {
   UnbatchedPaymentItem,
   PaymentBatchDetailResponse,
 } from "@/core_components/apis/admin/labService";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
 
 export interface BatchPaymentItem {
   id: string;
@@ -19,6 +21,12 @@ export interface BatchPaymentItem {
   status: "Transferred" | "Processing" | "Failed";
 }
 
+const BATCH_PAYMENT_KEYS = [
+  "FETCH_BATCHES_REQUEST",
+  "FETCH_UNBATCHED_REQUEST",
+  "FETCH_BATCH_DETAIL_REQUEST",
+] as const;
+
 export const useBatchPayment = (labId: string) => {
   const {
     getUnbatchedPayments,
@@ -27,6 +35,7 @@ export const useBatchPayment = (labId: string) => {
     getBatchDetails,
     deleteBatchPayment,
   } = useLabService();
+  const { controllers } = useAbortController(BATCH_PAYMENT_KEYS);
   const [loading, setLoading] = useState(true);
   const [batches, setBatches] = useState<BatchPaymentItem[]>([]);
 
@@ -60,55 +69,84 @@ export const useBatchPayment = (labId: string) => {
   const fetchBatches = useCallback(async () => {
     if (!labId) return;
     setLoading(true);
-    const response = await listBatchPayments({
-      branchId: labId,
-      pageNumber: 1,
-      rowsPerPage: 100,
-    });
+    controllers.FETCH_BATCHES_REQUEST.reset();
+    const signal = controllers.FETCH_BATCHES_REQUEST.signal;
 
-    if (response.success && response.data?.data?.items) {
-      const apiBatches = response.data.data.items;
+    try {
+      const response = await listBatchPayments(
+        {
+          branchId: labId,
+          pageNumber: 1,
+          rowsPerPage: 100,
+        },
+        { signal },
+      );
 
-      const mapped: BatchPaymentItem[] = apiBatches.map((pb: any) => {
-        // Map C# PaymentBatchStatus (1 = Initiated, 2 = Paid, 3 = Settled, 4 = Abandoned)
-        let statusString: "Transferred" | "Processing" | "Failed" =
-          "Processing";
-        const statusVal = pb.status;
-        if (
-          statusVal === 3 ||
-          statusVal === "Settled" ||
-          statusVal === "settled" ||
-          statusVal === "Transferred"
-        ) {
-          statusString = "Transferred";
-        } else if (
-          statusVal === 4 ||
-          statusVal === "Abandoned" ||
-          statusVal === "abandoned" ||
-          statusVal === "Failed"
-        ) {
-          statusString = "Failed";
-        } else {
-          statusString = "Processing";
-        }
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
 
-        return {
-          id: pb.id,
-          batchRef: pb.notes || `BAT-${pb.id.slice(0, 6).toUpperCase()}`,
-          payoutDate: pb.createdAt,
-          grossAmount: Number(pb.totalGrossAmount || 0),
-          commission: Number(pb.totalPlatformCommission || 0),
-          netAmount: Number(pb.totalNetPayout || 0),
-          status: statusString,
-        };
-      });
+      if (response.success && response.data?.data?.items) {
+        const apiBatches = response.data.data.items;
 
-      setBatches(mapped);
-    } else {
+        const mapped: BatchPaymentItem[] = apiBatches.map((pb: any) => {
+          // Map C# PaymentBatchStatus (1 = Initiated, 2 = Paid, 3 = Settled, 4 = Abandoned)
+          let statusString: "Transferred" | "Processing" | "Failed" =
+            "Processing";
+          const statusVal = pb.status;
+          if (
+            statusVal === 3 ||
+            statusVal === "Settled" ||
+            statusVal === "settled" ||
+            statusVal === "Transferred"
+          ) {
+            statusString = "Transferred";
+          } else if (
+            statusVal === 4 ||
+            statusVal === "Abandoned" ||
+            statusVal === "abandoned" ||
+            statusVal === "Failed"
+          ) {
+            statusString = "Failed";
+          } else {
+            statusString = "Processing";
+          }
+
+          return {
+            id: pb.id,
+            batchRef: pb.notes || `BAT-${pb.id.slice(0, 6).toUpperCase()}`,
+            payoutDate: pb.createdAt,
+            grossAmount: Number(pb.totalGrossAmount || 0),
+            commission: Number(pb.totalPlatformCommission || 0),
+            netAmount: Number(pb.totalNetPayout || 0),
+            status: statusString,
+          };
+        });
+
+        setBatches(mapped);
+      } else {
+        setBatches([]);
+      }
+      setLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
       setBatches([]);
+      setLoading(false);
     }
-    setLoading(false);
-  }, [labId, listBatchPayments]);
+  }, [labId, listBatchPayments, controllers]);
 
   useEffect(() => {
     fetchBatches();
@@ -118,29 +156,81 @@ export const useBatchPayment = (labId: string) => {
   const fetchUnbatched = useCallback(async () => {
     if (!labId) return;
     setUnbatchedLoading(true);
-    const response = await getUnbatchedPayments(labId);
-    if (response.success && response.data?.data) {
-      setUnbatchedPayments(response.data.data);
-    } else {
+    controllers.FETCH_UNBATCHED_REQUEST.reset();
+    const signal = controllers.FETCH_UNBATCHED_REQUEST.signal;
+
+    try {
+      const response = await getUnbatchedPayments(labId, { signal });
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
+
+      if (response.success && response.data?.data) {
+        setUnbatchedPayments(response.data.data);
+      } else {
+        setUnbatchedPayments([]);
+      }
+      setUnbatchedLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
       setUnbatchedPayments([]);
+      setUnbatchedLoading(false);
     }
-    setUnbatchedLoading(false);
-  }, [labId, getUnbatchedPayments]);
+  }, [labId, getUnbatchedPayments, controllers]);
 
   // Fetch specific batch detail
   const fetchBatchDetail = useCallback(
     async (batchId: string) => {
       setIsDetailDialogOpen(true);
       setDetailLoading(true);
-      const response = await getBatchDetails(batchId);
-      if (response.success && response.data?.data) {
-        setSelectedBatchDetail(response.data.data);
-      } else {
+      controllers.FETCH_BATCH_DETAIL_REQUEST.reset();
+      const signal = controllers.FETCH_BATCH_DETAIL_REQUEST.signal;
+
+      try {
+        const response = await getBatchDetails(batchId, { signal });
+        if (
+          signal.aborted ||
+          (response.error &&
+            (response.error.name === "CanceledError" ||
+              response.error.message === "canceled" ||
+              axios.isCancel(response.error)))
+        ) {
+          return;
+        }
+
+        if (response.success && response.data?.data) {
+          setSelectedBatchDetail(response.data.data);
+        } else {
+          setSelectedBatchDetail(null);
+        }
+        setDetailLoading(false);
+      } catch (error: any) {
+        if (
+          signal.aborted ||
+          error?.name === "CanceledError" ||
+          error?.message === "canceled" ||
+          axios.isCancel(error)
+        ) {
+          return;
+        }
         setSelectedBatchDetail(null);
+        setDetailLoading(false);
       }
-      setDetailLoading(false);
     },
-    [getBatchDetails],
+    [getBatchDetails, controllers],
   );
 
   // Trigger loading when modal dialog is opened

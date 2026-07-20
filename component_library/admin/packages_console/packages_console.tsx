@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import axios from "axios";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -30,6 +31,7 @@ import MedicalServicesIcon from "@mui/icons-material/MedicalServices";
 import ScienceIcon from "@mui/icons-material/Science";
 import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
 
 interface ServicePublicDto {
   id: string;
@@ -62,6 +64,8 @@ const EMPTY_FORM = {
   commission: 15,
   serviceIds: [] as string[],
 };
+
+const PACKAGES_CONSOLE_KEYS = ["FETCH_PACKAGES_REQUEST"] as const;
 
 // ── ServiceSelector — defined OUTSIDE component to satisfy react-hooks/static-components ──
 const ServiceSelector: React.FC<{
@@ -202,6 +206,7 @@ const ServiceSelector: React.FC<{
 
 export const PackagesConsole: React.FC = () => {
   const { get, post, put } = useApi();
+  const { controllers } = useAbortController(PACKAGES_CONSOLE_KEYS);
 
   const [packages, setPackages] = useState<PackageItem[]>([]);
   const [allServices, setAllServices] = useState<ServicePublicDto[]>([]);
@@ -219,17 +224,51 @@ export const PackagesConsole: React.FC = () => {
   // ── Load ──────────────────────────────────────────────────────────
   const load = useCallback(async () => {
     setLoading(true);
-    const [pkgRes, svcRes] = await Promise.all([
-      get<any>({ endpoint: "/api/packages/admin", requireAuth: true }),
-      get<any>({ endpoint: "/api/services/all", requireAuth: true }),
-    ]);
-    if (pkgRes.success && pkgRes.data?.data) setPackages(pkgRes.data.data);
-    if (svcRes.success && svcRes.data?.data)
-      setAllServices(
-        svcRes.data.data.filter((s: ServicePublicDto) => s.isActive),
-      );
-    setLoading(false);
-  }, [get]);
+    controllers.FETCH_PACKAGES_REQUEST.reset();
+    const signal = controllers.FETCH_PACKAGES_REQUEST.signal;
+
+    try {
+      const [pkgRes, svcRes] = await Promise.all([
+        get<any>({
+          endpoint: "/api/packages/admin",
+          requireAuth: true,
+          signal,
+        }),
+        get<any>({ endpoint: "/api/services/all", requireAuth: true, signal }),
+      ]);
+
+      if (
+        signal.aborted ||
+        (pkgRes.error &&
+          (pkgRes.error.name === "CanceledError" ||
+            pkgRes.error.message === "canceled" ||
+            axios.isCancel(pkgRes.error))) ||
+        (svcRes.error &&
+          (svcRes.error.name === "CanceledError" ||
+            svcRes.error.message === "canceled" ||
+            axios.isCancel(svcRes.error)))
+      ) {
+        return;
+      }
+
+      if (pkgRes.success && pkgRes.data?.data) setPackages(pkgRes.data.data);
+      if (svcRes.success && svcRes.data?.data)
+        setAllServices(
+          svcRes.data.data.filter((s: ServicePublicDto) => s.isActive),
+        );
+      setLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
+      setLoading(false);
+    }
+  }, [get, controllers]);
 
   useEffect(() => {
     load();

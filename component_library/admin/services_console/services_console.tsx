@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo } from "react";
+import axios from "axios";
 import Box from "@mui/material/Box";
 import Typography from "@mui/material/Typography";
 import Button from "@mui/material/Button";
@@ -30,6 +31,7 @@ import ScienceIcon from "@mui/icons-material/Science";
 import BusinessIcon from "@mui/icons-material/Business";
 import toast, { Toaster } from "react-hot-toast";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
 
 interface ServiceAdminDto {
   id: string;
@@ -44,8 +46,11 @@ interface ServiceAdminDto {
   createdAt: string;
 }
 
+const SERVICES_CONSOLE_KEYS = ["FETCH_SERVICES_REQUEST"] as const;
+
 export const ServicesConsole: React.FC = () => {
   const { get, post, put } = useApi();
+  const { controllers } = useAbortController(SERVICES_CONSOLE_KEYS);
 
   const [services, setServices] = useState<ServiceAdminDto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,15 +84,42 @@ export const ServicesConsole: React.FC = () => {
   // ── Load ──────────────────────────────────────────────────────────
   const loadServices = useCallback(async () => {
     setLoading(true);
-    const res = await get<any>({
-      endpoint: "/api/services/all",
-      requireAuth: true,
-    });
-    if (res.success && res.data?.data) {
-      setServices(res.data.data);
+    controllers.FETCH_SERVICES_REQUEST.reset();
+    const signal = controllers.FETCH_SERVICES_REQUEST.signal;
+
+    try {
+      const res = await get<any>({
+        endpoint: "/api/services/all",
+        requireAuth: true,
+        signal,
+      });
+
+      if (
+        signal.aborted ||
+        (res.error &&
+          (res.error.name === "CanceledError" ||
+            res.error.message === "canceled" ||
+            axios.isCancel(res.error)))
+      ) {
+        return;
+      }
+
+      if (res.success && res.data?.data) {
+        setServices(res.data.data);
+      }
+      setLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
+      setLoading(false);
     }
-    setLoading(false);
-  }, [get]);
+  }, [get, controllers]);
 
   useEffect(() => {
     loadServices();

@@ -14,3 +14,7 @@ export { default as PackagesConsole } from "./packages_console";
 export * from "./packages_console";
 export { PayrollConsole } from "./payroll_console";
 export * from "./payroll_console";
+export { default as Settings } from "./settings";
+export * from "./settings";
+export { default as AdminSupport } from "./support";
+export * from "./support";

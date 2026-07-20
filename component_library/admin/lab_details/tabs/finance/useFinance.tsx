@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
+import axios from "axios";
 import {
   GridFilters,
   PaginationProps,
@@ -7,6 +8,7 @@ import {
   useLabService,
   UnbatchedPaymentItem,
 } from "@/core_components/apis/admin/labService";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
 
 export interface MappedInvoiceItem {
   id: string;
@@ -20,8 +22,11 @@ export interface MappedInvoiceItem {
   status: "Paid" | "Pending";
 }
 
+const FINANCE_KEYS = ["FETCH_FINANCE_REQUEST"] as const;
+
 export const useFinance = (labId: string) => {
   const { getUnbatchedPayments } = useLabService();
+  const { controllers } = useAbortController(FINANCE_KEYS);
   const [loading, setLoading] = useState(true);
   const [invoices, setInvoices] = useState<MappedInvoiceItem[]>([]);
 
@@ -38,30 +43,55 @@ export const useFinance = (labId: string) => {
   const fetchFinance = useCallback(async () => {
     if (!labId) return;
     setLoading(true);
-    const response = await getUnbatchedPayments(labId);
+    controllers.FETCH_FINANCE_REQUEST.reset();
+    const signal = controllers.FETCH_FINANCE_REQUEST.signal;
 
-    if (response.success && response.data?.data) {
-      const apiPayments = response.data.data;
-      console.log(apiPayments);
-      // Map raw API array items to the frontend invoices structure
-      const mapped: MappedInvoiceItem[] = apiPayments.map((item) => ({
-        id: item.paymentId,
-        invoiceNumber: item.appointmentNumber,
-        customerName: item.customerName || "Customer",
-        date: item.paidAt || new Date().toISOString(),
-        amount: Number(item.totalAmount || 0),
-        commission: Number(item.platformCommission || 0),
-        labPayout: Number(item.labPayout || 0),
-        paymentMethod: item.paymentMethod || "UPI",
-        status: "Paid", // unbatched payments are received/paid invoices
-      }));
+    try {
+      const response = await getUnbatchedPayments(labId, { signal });
 
-      setInvoices(mapped);
-    } else {
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
+
+      if (response.success && response.data?.data) {
+        const apiPayments = response.data.data;
+        // Map raw API array items to the frontend invoices structure
+        const mapped: MappedInvoiceItem[] = apiPayments.map((item) => ({
+          id: item.paymentId,
+          invoiceNumber: item.appointmentNumber,
+          customerName: item.customerName || "Customer",
+          date: item.paidAt || new Date().toISOString(),
+          amount: Number(item.totalAmount || 0),
+          commission: Number(item.platformCommission || 0),
+          labPayout: Number(item.labPayout || 0),
+          paymentMethod: item.paymentMethod || "UPI",
+          status: "Paid", // unbatched payments are received/paid invoices
+        }));
+
+        setInvoices(mapped);
+      } else {
+        setInvoices([]);
+      }
+      setLoading(false);
+    } catch (error: any) {
+      if (
+        signal.aborted ||
+        error?.name === "CanceledError" ||
+        error?.message === "canceled" ||
+        axios.isCancel(error)
+      ) {
+        return;
+      }
       setInvoices([]);
+      setLoading(false);
     }
-    setLoading(false);
-  }, [labId, getUnbatchedPayments]);
+  }, [labId, getUnbatchedPayments, controllers]);
 
   useEffect(() => {
     fetchFinance();

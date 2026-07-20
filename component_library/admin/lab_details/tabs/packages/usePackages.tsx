@@ -1,5 +1,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
+import axios from "axios";
 import { useApi } from "@/core_components/hooks/useApi/useApi";
+import { useAbortController } from "@/core_components/hooks/useAbortController/useAbortController";
 
 export interface AdminBranchPackageItem {
   branchPackageId?: string;
@@ -17,8 +19,11 @@ export interface AdminBranchPackageItem {
   serviceIds: string[];
 }
 
+const PACKAGES_KEYS = ["FETCH_PACKAGES_REQUEST"] as const;
+
 export const usePackages = (branchId: string) => {
   const { get, put } = useApi();
+  const { controllers } = useAbortController(PACKAGES_KEYS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [packages, setPackages] = useState<AdminBranchPackageItem[]>([]);
@@ -27,23 +32,45 @@ export const usePackages = (branchId: string) => {
   const fetchPackages = useCallback(async () => {
     if (!branchId) return;
     setLoading(true);
+    controllers.FETCH_PACKAGES_REQUEST.reset();
+    const signal = controllers.FETCH_PACKAGES_REQUEST.signal;
     try {
       const response = await get<any>({
         endpoint: `/api/admin/branches/${branchId}/packages`,
         requireAuth: true,
+        signal,
       });
+
+      if (
+        signal.aborted ||
+        (response.error &&
+          (response.error.name === "CanceledError" ||
+            response.error.message === "canceled" ||
+            axios.isCancel(response.error)))
+      ) {
+        return;
+      }
+
       if (response.success && response.data?.data) {
         setPackages(response.data.data);
       } else {
         setPackages([]);
       }
-    } catch (e) {
+      setLoading(false);
+    } catch (e: any) {
+      if (
+        signal.aborted ||
+        e?.name === "CanceledError" ||
+        e?.message === "canceled" ||
+        axios.isCancel(e)
+      ) {
+        return;
+      }
       console.error("Failed to load branch packages:", e);
       setPackages([]);
-    } finally {
       setLoading(false);
     }
-  }, [branchId, get]);
+  }, [branchId, get, controllers]);
 
   useEffect(() => {
     fetchPackages();

@@ -124,10 +124,27 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
 
   // Initialise Leaflet map (client-side only)
   useEffect(() => {
-    if (!mapRef.current || leafletMapRef.current) return;
+    let isCancelled = false;
+
+    if (
+      !mapRef.current ||
+      leafletMapRef.current ||
+      (mapRef.current as any)._leaflet_id
+    ) {
+      return;
+    }
 
     // Dynamic import to avoid SSR issues with Leaflet
     import("leaflet").then((L) => {
+      if (
+        isCancelled ||
+        !mapRef.current ||
+        leafletMapRef.current ||
+        (mapRef.current as any)._leaflet_id
+      ) {
+        return;
+      }
+
       // Fix default marker icon paths in Next.js
       delete (L.Icon.Default.prototype as any)._getIconUrl;
       L.Icon.Default.mergeOptions({
@@ -137,8 +154,6 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         shadowUrl:
           "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
       });
-
-      if (!mapRef.current) return;
 
       const map = L.map(mapRef.current, {
         center: [initialLat, initialLng],
@@ -179,11 +194,15 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     });
 
     return () => {
+      isCancelled = true;
       if (leafletMapRef.current) {
         leafletMapRef.current.remove();
         leafletMapRef.current = null;
         markerRef.current = null;
         setMapReady(false);
+      }
+      if (mapRef.current) {
+        delete (mapRef.current as any)._leaflet_id;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -191,6 +210,7 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
 
   // Render nearby lab markers
   useEffect(() => {
+    let isCancelled = false;
     if (!leafletMapRef.current || !mapReady) return;
     const map = leafletMapRef.current;
 
@@ -201,6 +221,8 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
     if (!labs || labs.length === 0) return;
 
     import("leaflet").then((L) => {
+      if (isCancelled || !leafletMapRef.current) return;
+
       const redIconInstance = L.divIcon({
         className: "custom-lab-marker",
         html: `
@@ -257,6 +279,10 @@ export const MapLocationPicker: React.FC<MapLocationPickerProps> = ({
         labMarkersRef.current.push(marker);
       });
     });
+
+    return () => {
+      isCancelled = true;
+    };
   }, [labs, mapReady]);
 
   // Use browser Geolocation
