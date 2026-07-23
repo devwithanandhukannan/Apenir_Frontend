@@ -695,8 +695,8 @@ export default function CustomerBookPage() {
     return {
       name: selection.name,
       sum,
-      finalAmount: idx === 0 ? sum : Math.round(sum * 0.8),
-      discount: idx === 0 ? 0 : Math.round(sum * 0.2),
+      finalAmount: sum,
+      discount: 0,
     };
   });
   const subtotal = memberTotals.reduce((sum, m) => sum + m.finalAmount, 0);
@@ -1997,7 +1997,7 @@ export default function CustomerBookPage() {
                           fontWeight: 600,
                         }}
                       >
-                        20% off applied for additional patients on each service.
+                        Pre-paid home collection slot selected.
                       </Typography>
                     )}
                   </CardContent>
@@ -2104,9 +2104,7 @@ export default function CustomerBookPage() {
                       {cart.map((item) => {
                         const qty = cartQuantities[item.id] || 1;
                         const price = getItemPrice(item);
-                        // First copy pays full price, subsequent copies get 20% discount (i.e. 80% price)
-                        const cost =
-                          price + (qty > 1 ? (qty - 1) * price * 0.8 : 0);
+                        const cost = price * qty;
                         const originalPrice = getItemOriginalPrice(item);
                         const originalCost = originalPrice
                           ? originalPrice * qty
@@ -2143,7 +2141,7 @@ export default function CustomerBookPage() {
                                 color="text.secondary"
                               >
                                 {qty} {qty === 1 ? "user" : "users"} (@ ₹{price}
-                                {qty > 1 ? " + 20% member off" : ""})
+                                )
                               </Typography>
                             </Box>
                             <Box sx={{ textAlign: "right" }}>
@@ -2197,25 +2195,7 @@ export default function CustomerBookPage() {
                           ₹{baseSubtotalTotal}
                         </Typography>
                       </Box>
-                      {memberCount > 1 && (
-                        <Box
-                          sx={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                          }}
-                        >
-                          <Typography variant="caption" color="success.main">
-                            Member discount (20% on additional members)
-                          </Typography>
-                          <Typography
-                            variant="caption"
-                            color="success.main"
-                            sx={{ fontWeight: 600 }}
-                          >
-                            - ₹{totalMemberDiscount}
-                          </Typography>
-                        </Box>
-                      )}
+                      {/* Member discount removed */}
                       {usingSplitMode && splitSuggestion ? (
                         splitSuggestion.labs.map((lab) => (
                           <Box
